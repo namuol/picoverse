@@ -6,38 +6,49 @@ __package_preload={}
 
 ---file:
 __package_preload['intro'] = function (...)
+component = require('component')
+wackytext = require('wackytext')
+
 intro = {}
 
 function intro.init(props)
-  props.color = props.color or orange
-  props.x = props.x or 0
-  props.y = props.y or 0
-  props._x = props.x
-  props._y = props.y
+  props.children = props.children or {
+    wackytext.init({text='test1'}),
+    wackytext.init({text='test2'}),
+    wackytext.init({text='test3'}),
+  }
+
   return props
 end
 
 function intro.update(props)
-  props.color = props.color + 1 % 16
-  
-  if (rnd(1) < 0.02) then
-    props.x = rnd(128)
-    props.y = rnd(128)
-  end
-
-  props._x += (props.x - props._x) * 0.1
-  props._y += (props.y - props._y) * 0.1
+  foreach(props.children, component.update)
 
   return props
 end
 
 function intro.draw(props)
   cls()
-  color(props.color)
-  print(props.text, props._x, props._y)
+  foreach(props.children, component.draw)
 end
 
 return intro
+end
+
+---file:
+__package_preload['component'] = function (...)
+function update(c)
+  c.props = c.update(c.props)
+end
+
+function draw(c)
+  c.draw(c.props)
+end
+
+return {
+  update=update,
+  draw=draw,
+}
 end
 
 ---file:
@@ -87,6 +98,49 @@ function _init()
  set_mode(intro, {text='hello', x=20})
 end
 
+end
+
+---file:
+__package_preload['wackytext'] = function (...)
+function init(props)
+  props.text = props.text or 'wacky'
+  props.color = props.color or rnd(16)
+  props.x = props.x or rnd(128)
+  props.y = props.y or rnd(128)
+  props._x = props.x
+  props._y = props.y
+  return {
+    props=props,
+    init=init,
+    update=update,
+    draw=draw
+  }
+end
+
+function update(props)
+  props.color = props.color + 1 % 16
+  
+  if (rnd(1) < 0.02) then
+    props.x = rnd(128)
+    props.y = rnd(128)
+  end
+
+  props._x += (props.x - props._x) * 0.1
+  props._y += (props.y - props._y) * 0.1
+
+  return props
+end
+
+function draw(props)
+  color(props.color)
+  print(props.text, props._x, props._y)
+end
+
+return {
+  init=init,
+  draw=draw,
+  update=update,
+}
 end
 --- require/dofile replacements
 
