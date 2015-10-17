@@ -1,16 +1,125 @@
 pico-8 cartridge // http://www.pico-8.com
 version 5
 __lua__
-function _init()
+--This file was generated with pack.lua
+__package_preload={}
+
+---file:
+__package_preload['screens.intro'] = function (...)
+intro = {}
+
+function intro.init(props)
+  props.color = props.color or orange
+  props.x = props.x or 0
+  props.y = props.y or 0
+  props._x = props.x
+  props._y = props.y
+  return props
+end
+
+function intro.update(props)
+  props.color = props.color + 1 % 16
+  
+  if (rnd(1) < 0.02) then
+    props.x = rnd(128)
+    props.y = rnd(128)
+  end
+
+  props._x += (props.x - props._x) * 0.1
+  props._y += (props.y - props._y) * 0.1
+
+  return props
+end
+
+function intro.draw(props)
+  cls()
+  color(props.color)
+  print(props.text, props._x, props._y)
+end
+
+return intro
+end
+
+---file:
+__package_preload['main'] = function (...)
+-- color constants
+
+black = 0
+dark_blue = 1
+dark_purple = 2
+dark_green = 3
+brown = 4
+dark_gray = 5
+light_gray = 6
+white = 7
+red = 8
+orange = 9
+yellow = 10
+green = 11
+blue = 12
+indigo = 13
+pink = 14
+peach = 15
+
+-- boilerplate
+
+__current_mode__ = nil
+__current_props__ = nil
+
+function set_mode(mode, initial_props)
+ __current_mode__ = mode
+ __current_props__ = mode.init(initial_props)
 end
 
 function _update()
+  __current_props__ = __current_mode__.update(__current_props__)
 end
 
 function _draw()
- cls()
- print('hello, pico8')
+  __current_mode__.draw(__current_props__)
 end
+
+intro = require('screens.intro')
+
+-- end game mode
+
+function _init()
+ set_mode(intro, {text='hello', x=20})
+end
+
+end
+--- require/dofile replacements
+
+__package_load = {}
+
+function assert(i,s)
+  if not i then
+    print(s)
+    stop()
+  end
+end
+
+function require(name)
+  if not __package_load[name] then
+    assert(__package_preload[name],"Error: module `"..name.."` does not exist.")
+    __package_load[name] = __package_preload[name]()
+  end
+  return __package_load[name]
+end
+
+function dofile(name)
+  local found
+  for ppname,_ in pairs(__package_preload) do
+    if name == ppname..".lua" then
+      found = ppname
+      break
+    end
+  end
+  assert(__package_preload[found],"Error: file `"..found..".lua` does not exist.")
+  return __package_preload[found]()
+end
+
+require"main"
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000

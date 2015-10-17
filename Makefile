@@ -9,10 +9,11 @@ utils/lua2pico.lua:
 
 build: utils utils/lua2pico.lua
 	@mkdir -p build
-	@utils/lua2pico.lua src/main.lua src/cart.p8 > build/picoverse.p8
+	@cp src/cart.p8 .tmp.p8
+	@utils/pack.lua src | utils/lua2pico.lua - .tmp.p8 > src/cart.p8
+	@rm .tmp.p8
 
-run: build pico-8/pico8
-	@cp build/picoverse.p8 pico-8/__tmp__.p8
-	@cd pico-8; ./pico8 -run __tmp__.p8; rm __tmp__.p8
+run: pico-8/pico8 build
+	@cd pico-8; ln -s ../src/cart.p8 .; ./pico8 -run cart.p8; unlink cart.p8
 
 .PHONY: build
