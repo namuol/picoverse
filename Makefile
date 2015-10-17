@@ -7,7 +7,7 @@ utils/lua2pico.lua:
 	git submodule init
 	git submodule update
 
-build: utils
+build: utils utils/lua2pico.lua
 	@mkdir -p build
 	@utils/lua2pico.lua src/main.lua src/cart.p8 > build/picoverse.p8
 
