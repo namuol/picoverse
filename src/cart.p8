@@ -5,7 +5,7 @@ __lua__
 __package_preload={}
 
 ---file:
-__package_preload['screens.intro'] = function (...)
+__package_preload['intro'] = function (...)
 intro = {}
 
 function intro.init(props)
@@ -79,7 +79,7 @@ function _draw()
   __current_mode__.draw(__current_props__)
 end
 
-intro = require('screens.intro')
+intro = require('intro')
 
 -- end game mode
 

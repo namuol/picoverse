@@ -35,7 +35,7 @@ function _draw()
   __current_mode__.draw(__current_props__)
 end
 
-intro = require('screens.intro')
+intro = require('intro')
 
 -- end game mode
 
