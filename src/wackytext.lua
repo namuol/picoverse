@@ -1,15 +1,21 @@
+component = require('component')
+make_tweener = require('make_tweener')
+
+funcs = nil
+
+tweener = make_tweener({x=0.1, y=0.1})
+
 function init(props)
   props.text = props.text or 'wacky'
   props.color = props.color or rnd(16)
   props.x = props.x or rnd(128)
   props.y = props.y or rnd(128)
-  props._x = props.x
-  props._y = props.y
+  
+  tweener.init(props)
+
   return {
     props=props,
-    init=init,
-    update=update,
-    draw=draw
+    funcs=funcs,
   }
 end
 
@@ -21,8 +27,7 @@ function update(props)
     props.y = rnd(128)
   end
 
-  props._x += (props.x - props._x) * 0.1
-  props._y += (props.y - props._y) * 0.1
+  tweener.tween(props)
 
   return props
 end
@@ -32,8 +37,6 @@ function draw(props)
   print(props.text, props._x, props._y)
 end
 
-return {
-  init=init,
-  draw=draw,
-  update=update,
-}
+funcs = component.create(init,update,draw)
+
+return funcs
