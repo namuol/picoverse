@@ -1,4 +1,5 @@
 require('colors')
+require('sprites')
 
 -- boilerplate
 

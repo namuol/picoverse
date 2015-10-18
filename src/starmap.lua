@@ -1,6 +1,14 @@
 local component = require('component')
 local dist = require('dist')
-local sprites = require('sprites')
+
+local draw_face = require('draw_face')
+
+function draw_random_faces()
+  cls()
+  for n=0,14*14 - 1 do
+    draw_face(nil, (n % 14)*9, flr(n/14)*9)
+  end
+end
 
 function draw_star(props)
   local color
@@ -33,6 +41,13 @@ function starmap.update(props)
 end
 
 function starmap.draw(props)
+  if btnp(4) then
+    draw_random_faces()
+  end
+  if btn(4) then
+    return
+  end
+  
   cls()
   
   circfill(props.player_pos.x, props.player_pos.y, props.player_range, dark_blue)
