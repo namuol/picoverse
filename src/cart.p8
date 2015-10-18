@@ -5,6 +5,156 @@ __lua__
 __package_preload={}
 
 ---file:
+__package_preload['starmap'] = function (...)
+component = require('component')
+dist = require('dist')
+
+function draw_star(props)
+  local color
+  local pos = props.star.pos
+  if dist(pos, props.player_pos) > props.player_range then
+    color = indigo
+  else
+    color = white
+  end
+
+  pset(pos.x, pos.y, color)
+end
+
+starmap = {}
+
+function starmap.init(props)
+  return props
+end
+
+function starmap.update(props)
+  return props
+end
+
+function starmap.draw(props)
+  cls()
+  circfill(props.player_pos.x, props.player_pos.y, props.player_range, dark_blue)
+  for n,star in pairs(props.stars) do
+    local star = props.stars[n]
+    draw_star({
+      star=star,
+      player_pos=props.player_pos,
+      player_range=props.player_range,
+    })
+  end
+end
+
+return starmap
+end
+
+---file:
+__package_preload['component'] = function (...)
+function update(c)
+  c.props = c.funcs.update(c.props)
+end
+
+function draw(c)
+  c.funcs.draw(c.props)
+end
+
+function create(init,update,draw)
+  return {
+    init=init,
+    update=update,
+    draw=draw,
+  }
+end
+
+return {
+  create=create,
+  update=update,
+  draw=draw,
+}
+end
+
+---file:
+__package_preload['make_tweener'] = function (...)
+return function(amts)
+  local tweener = {}
+
+  function tweener.init(props)
+    -- initialize default vals
+    for p,amt in pairs(amts) do
+      props['_'..p] = props[p]
+    end
+  end
+
+  function tweener.tween(props)
+    for p,amt in pairs(amts) do
+      local _p = '_'..p
+      local v = props[_p]
+      props[_p] += (props[p] - v) * amt
+    end
+  end
+
+  return tweener
+end
+
+end
+
+---file:
+__package_preload['wackytext'] = function (...)
+component = require('component')
+make_tweener = require('make_tweener')
+
+funcs = nil
+
+tweener = make_tweener({x=0.1, y=0.1})
+
+function init(props)
+  props.text = props.text or 'wacky'
+  props.color = props.color or rnd(16)
+  props.x = props.x or rnd(128)
+  props.y = props.y or rnd(128)
+  
+  tweener.init(props)
+
+  return {
+    props=props,
+    funcs=funcs,
+  }
+end
+
+function update(props)
+  props.color = props.color + 1 % 16
+  
+  if (rnd(1) < 0.02) then
+    props.x = rnd(128)
+    props.y = rnd(128)
+  end
+
+  tweener.tween(props)
+
+  return props
+end
+
+function draw(props)
+  color(props.color)
+  print(props.text, props._x, props._y)
+end
+
+funcs = component.create(init,update,draw)
+
+return funcs
+end
+
+---file:
+__package_preload['dist'] = function (...)
+function dist(a,b)
+  local dx = b.x-a.x
+  local dy = b.y-a.y
+  return sqrt(dx*dx + dy*dy)
+end
+
+return dist
+end
+
+---file:
 __package_preload['intro'] = function (...)
 component = require('component')
 wackytext = require('wackytext')
@@ -36,22 +186,6 @@ return intro
 end
 
 ---file:
-__package_preload['component'] = function (...)
-function update(c)
-  c.props = c.update(c.props)
-end
-
-function draw(c)
-  c.draw(c.props)
-end
-
-return {
-  update=update,
-  draw=draw,
-}
-end
-
----file:
 __package_preload['main'] = function (...)
 -- color constants
 
@@ -78,12 +212,16 @@ __current_mode__ = nil
 __current_props__ = nil
 
 function set_mode(mode, initial_props)
- __current_mode__ = mode
- __current_props__ = mode.init(initial_props)
+  __current_mode__ = mode
+  __current_props__ = mode.init(initial_props)
 end
 
 function _update()
   __current_props__ = __current_mode__.update(__current_props__)
+
+  if btnp(4) then
+    do_random_starmap()
+  end
 end
 
 function _draw()
@@ -91,56 +229,39 @@ function _draw()
 end
 
 intro = require('intro')
+starmap = require('starmap')
 
 -- end game mode
 
-function _init()
- set_mode(intro, {text='hello', x=20})
-end
-
-end
-
----file:
-__package_preload['wackytext'] = function (...)
-function init(props)
-  props.text = props.text or 'wacky'
-  props.color = props.color or rnd(16)
-  props.x = props.x or rnd(128)
-  props.y = props.y or rnd(128)
-  props._x = props.x
-  props._y = props.y
-  return {
-    props=props,
-    init=init,
-    update=update,
-    draw=draw
+function random_star()
+  local new_star = {
+    pos={x=rnd(128),y=rnd(128)}
   }
+
+  return new_star
 end
 
-function update(props)
-  props.color = props.color + 1 % 16
-  
-  if (rnd(1) < 0.02) then
-    props.x = rnd(128)
-    props.y = rnd(128)
+function times(n, func)
+  local ret = {}
+  for i=0,n do
+    add(ret, func())
   end
-
-  props._x += (props.x - props._x) * 0.1
-  props._y += (props.y - props._y) * 0.1
-
-  return props
+  return ret
 end
 
-function draw(props)
-  color(props.color)
-  print(props.text, props._x, props._y)
+function do_random_starmap()
+  local stars = times(80, random_star)
+  set_mode(starmap, {
+    player_pos=stars[1+flr(rnd(#stars))].pos,
+    player_range=5 + rnd(40),
+    stars=stars
+  })
 end
 
-return {
-  init=init,
-  draw=draw,
-  update=update,
-}
+function _init()
+  do_random_starmap()
+end
+
 end
 --- require/dofile replacements
 
@@ -183,13 +304,13 @@ __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0bbb0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+b000b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+b000b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+b000b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0b0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0b0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
