@@ -9,7 +9,7 @@ utils/lua2pico.lua:
 
 build: utils utils/lua2pico.lua
 	@mkdir -p build
-	@cp src/cart.p8 .tmp.p8
+	@utils/png2pico.lua src/gfx.png src/cart.p8 > .tmp.p8
 	@utils/pack.lua src | utils/lua2pico.lua - .tmp.p8 > src/cart.p8
 	@rm .tmp.p8
 

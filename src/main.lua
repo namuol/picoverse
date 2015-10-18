@@ -1,21 +1,4 @@
--- color constants
-
-black = 0
-dark_blue = 1
-dark_purple = 2
-dark_green = 3
-brown = 4
-dark_gray = 5
-light_gray = 6
-white = 7
-red = 8
-orange = 9
-yellow = 10
-green = 11
-blue = 12
-indigo = 13
-pink = 14
-peach = 15
+require('colors')
 
 -- boilerplate
 
@@ -46,7 +29,9 @@ starmap = require('starmap')
 
 function random_star()
   local new_star = {
-    pos={x=rnd(128),y=rnd(128)}
+    pos={x=rnd(128),y=rnd(128)},
+    visited=rnd(1)<0.05,
+    mission=rnd(1)<0.01,
   }
 
   return new_star
@@ -62,8 +47,10 @@ end
 
 function do_random_starmap()
   local stars = times(80, random_star)
+  local current_star = stars[1+flr(rnd(#stars))]
+  current_star.visited = true
   set_mode(starmap, {
-    player_pos=stars[1+flr(rnd(#stars))].pos,
+    player_pos=current_star.pos,
     player_range=5 + rnd(40),
     stars=stars
   })
