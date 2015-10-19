@@ -1,5 +1,6 @@
 require('colors')
 require('sprites')
+require('buttons')
 
 -- boilerplate
 
@@ -43,17 +44,7 @@ function times(n, func)
   return ret
 end
 
-function do_random_starmap()
-  local stars = times(80, random_star)
-  local current_star = stars[1+flr(rnd(#stars))]
-  current_star.visited = true
-  set_mode(starmap, {
-    player_pos=current_star.pos,
-    player_range=5 + rnd(40),
-    stars=stars
-  })
-end
-
 function _init()
-  set_mode(faces,{})
+  set_mode(starmap)
+  -- do_random_starmap()
 end
