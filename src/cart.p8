@@ -5,6 +5,65 @@ __lua__
 __package_preload={}
 
 ---file:
+__package_preload['sprites'] = function (...)
+sprites = {
+  indicator=16,
+  face=80,
+  hair=81,
+  facial_hair=85,
+}
+end
+
+---file:
+__package_preload['dist'] = function (...)
+function dist(a,b)
+  local dx = b.x-a.x
+  local dy = b.y-a.y
+  return sqrt(dx*dx + dy*dy)
+end
+
+return dist
+end
+
+---file:
+__package_preload['faces_test'] = function (...)
+local draw_face = require('draw_face')
+
+function draw_random_faces()
+  cls()
+  for n=0,14*14 - 1 do
+    draw_face(nil, (n % 14)*9, flr(n/14)*9)
+  end
+end
+
+local faces = {}
+
+function faces.init(props)
+  draw_random_faces()
+  return {
+    redraw=false
+  }
+end
+
+function faces.update(props)
+  if btnp(4) then
+    props.redraw = true
+  else
+    props.redraw = false
+  end
+  return props
+end
+
+function faces.draw(props)
+  if props.redraw then
+    draw_random_faces()
+  end
+end
+
+return faces
+end
+
+---file:
 __package_preload['make_tweener'] = function (...)
 return function(amts)
   local tweener = {}
@@ -27,108 +86,6 @@ return function(amts)
   return tweener
 end
 
-end
-
----file:
-__package_preload['intro'] = function (...)
-component = require('component')
-wackytext = require('wackytext')
-
-intro = {}
-
-function intro.init(props)
-  props.children = props.children or {
-    wackytext.init({text='test1'}),
-    wackytext.init({text='test2'}),
-    wackytext.init({text='test3'}),
-  }
-
-  return props
-end
-
-function intro.update(props)
-  foreach(props.children, component.update)
-
-  return props
-end
-
-function intro.draw(props)
-  cls()
-  foreach(props.children, component.draw)
-end
-
-return intro
-end
-
----file:
-__package_preload['starmap'] = function (...)
-local component = require('component')
-local dist = require('dist')
-
-local draw_face = require('draw_face')
-
-function draw_random_faces()
-  cls()
-  for n=0,14*14 - 1 do
-    draw_face(nil, (n % 14)*9, flr(n/14)*9)
-  end
-end
-
-function draw_star(props)
-  local color
-  local pos = props.star.pos
-  if dist(pos, props.player_pos) > props.player_range then
-    color = indigo
-  else
-    color = white
-  end
-
-  if props.star.visited then
-    circ(pos.x, pos.y, 2, indigo)
-  end
-
-  if props.star.mission then
-    circ(pos.x, pos.y, 2, yellow)
-  end
-
-  pset(pos.x, pos.y, color)
-end
-
-starmap = {}
-
-function starmap.init(props)
-  return props
-end
-
-function starmap.update(props)
-  return props
-end
-
-function starmap.draw(props)
-  if btnp(4) then
-    draw_random_faces()
-  end
-  if btn(4) then
-    return
-  end
-  
-  cls()
-  
-  circfill(props.player_pos.x, props.player_pos.y, props.player_range, dark_blue)
-  
-  for n,star in pairs(props.stars) do
-    local star = props.stars[n]
-    draw_star({
-      star=star,
-      player_pos=props.player_pos,
-      player_range=props.player_range,
-    })
-  end
-
-  spr(sprites.indicator, props.player_pos.x-3, props.player_pos.y-9)
-end
-
-return starmap
 end
 
 ---file:
@@ -174,161 +131,6 @@ blue = 12
 indigo = 13
 pink = 14
 peach = 15
-end
-
----file:
-__package_preload['main'] = function (...)
-require('colors')
-require('sprites')
-
--- boilerplate
-
-__current_mode__ = nil
-__current_props__ = nil
-
-function set_mode(mode, initial_props)
-  __current_mode__ = mode
-  __current_props__ = mode.init(initial_props)
-end
-
-function _update()
-  __current_props__ = __current_mode__.update(__current_props__)
-
-  if btnp(4) then
-    do_random_starmap()
-  end
-end
-
-function _draw()
-  __current_mode__.draw(__current_props__)
-end
-
-intro = require('intro')
-starmap = require('starmap')
-
--- end game mode
-
-function random_star()
-  local new_star = {
-    pos={x=rnd(128),y=rnd(128)},
-    visited=rnd(1)<0.05,
-    mission=rnd(1)<0.01,
-  }
-
-  return new_star
-end
-
-function times(n, func)
-  local ret = {}
-  for i=0,n do
-    add(ret, func())
-  end
-  return ret
-end
-
-function do_random_starmap()
-  local stars = times(80, random_star)
-  local current_star = stars[1+flr(rnd(#stars))]
-  current_star.visited = true
-  set_mode(starmap, {
-    player_pos=current_star.pos,
-    player_range=5 + rnd(40),
-    stars=stars
-  })
-end
-
-function _init()
-  do_random_starmap()
-end
-
-end
-
----file:
-__package_preload['draw_face'] = function (...)
-local skintones = {
-  indigo,
-  brown,
-  peach,
-  blue,
-  green,
-  white,
-  red,
-}
-
-local hairtones = {
-  dark_purple,
-  light_gray,
-  dark_gray,
-  blue,
-  green,
-  dark_green,
-  orange,
-  yellow,
-  white,
-  red,
-  brown,
-}
-
-function random_face_props()
-  local skintone_idx = flr(rnd(#skintones))
-  local skintone = skintones[1 + skintone_idx]
-
-  local hairtone = skintone
-  
-  while hairtone == skintone do
-    hairtone = hairtones[1 + flr(rnd(#hairtones))]
-  end
-
-  local hair
-  if rnd(1) < 0.8 then
-    hair = sprites.hair + flr(rnd(sprites.facial_hair - sprites.hair))
-  end
-
-  local facial_hair
-  if rnd(1) < 0.25 then
-    facial_hair = sprites.facial_hair + flr(rnd(4))
-  end
-
-  return {
-    skintone=skintone,
-    hairtone=hairtone,
-    hair=hair,
-    facial_hair=facial_hair,
-  }
-end
-
-function draw_face(props,x,y)
-  if not props then
-    props = random_face_props()
-  end
-
-  pal(red, props.skintone)
-  spr(sprites.face, x, y)
-
-  if props.hair then
-    pal(red, props.hairtone)
-    spr(props.hair, x, y)
-  end
-
-  if props.facial_hair then
-    pal(red, props.hairtone)
-    spr(props.facial_hair, x, y)
-  end
-
-  pal(red, red)
-end
-
-return draw_face
-end
-
----file:
-__package_preload['sprites'] = function (...)
-sprites = {
-  indicator=16,
-  face=80,
-  hair=81,
-  facial_hair=85,
-}
 end
 
 ---file:
@@ -378,14 +180,246 @@ return funcs
 end
 
 ---file:
-__package_preload['dist'] = function (...)
-function dist(a,b)
-  local dx = b.x-a.x
-  local dy = b.y-a.y
-  return sqrt(dx*dx + dy*dy)
+__package_preload['starmap'] = function (...)
+local component = require('component')
+local dist = require('dist')
+
+function draw_star(props)
+  local color
+  local pos = props.star.pos
+  if dist(pos, props.player_pos) > props.player_range then
+    color = indigo
+  else
+    color = white
+  end
+
+  if props.star.visited then
+    circ(pos.x, pos.y, 2, indigo)
+  end
+
+  if props.star.mission then
+    circ(pos.x, pos.y, 2, yellow)
+  end
+
+  pset(pos.x, pos.y, color)
 end
 
-return dist
+starmap = {}
+
+function starmap.init(props)
+  return props
+end
+
+function starmap.update(props)
+  return props
+end
+
+function starmap.draw(props)
+  cls()
+  
+  circfill(props.player_pos.x, props.player_pos.y, props.player_range, dark_blue)
+  
+  for n,star in pairs(props.stars) do
+    local star = props.stars[n]
+    draw_star({
+      star=star,
+      player_pos=props.player_pos,
+      player_range=props.player_range,
+    })
+  end
+
+  spr(sprites.indicator, props.player_pos.x-3, props.player_pos.y-9)
+end
+
+return starmap
+end
+
+---file:
+__package_preload['draw_face'] = function (...)
+local skintones = {
+  -- hooman colors:
+  brown,
+  brown,
+  brown,
+  peach,
+  peach,
+  peach,
+  white,
+  white,
+
+  -- alium colors:
+  indigo,
+  blue,
+  green,
+  red,
+}
+
+local hairtones = {
+  -- orange,
+  orange,
+  -- yellow,
+  yellow,
+  -- white,
+  white,
+  -- brown,
+  brown,
+  -- light_gray,
+  light_gray,
+  -- dark_gray,
+  dark_gray,
+
+  dark_purple,
+  blue,
+  -- green,
+  dark_green,
+  -- red,
+}
+
+function random_face_props()
+  local skintone_idx = flr(rnd(#skintones))
+  local skintone = skintones[1 + skintone_idx]
+
+  local hairtone = skintone
+  
+  while hairtone == skintone do
+    hairtone = hairtones[1 + flr(rnd(#hairtones))]
+  end
+
+  local hair
+  if rnd(1) < 0.9 then
+    hair = sprites.hair + flr(rnd(sprites.facial_hair - sprites.hair))
+  end
+
+  local facial_hair
+  if rnd(1) < 0.25 then
+    facial_hair = sprites.facial_hair + flr(rnd(4))
+  end
+
+  return {
+    skintone=skintone,
+    hairtone=hairtone,
+    hair=hair,
+    facial_hair=facial_hair,
+  }
+end
+
+function draw_face(props,x,y)
+  if not props then
+    props = random_face_props()
+  end
+
+  pal(red, props.skintone)
+  spr(sprites.face, x, y)
+
+  if props.hair then
+    pal(red, props.hairtone)
+    spr(props.hair, x, y)
+  end
+
+  if props.facial_hair then
+    pal(red, props.hairtone)
+    spr(props.facial_hair, x, y)
+  end
+
+  pal(red, red)
+end
+
+return draw_face
+end
+
+---file:
+__package_preload['intro'] = function (...)
+component = require('component')
+wackytext = require('wackytext')
+
+intro = {}
+
+function intro.init(props)
+  props.children = props.children or {
+    wackytext.init({text='test1'}),
+    wackytext.init({text='test2'}),
+    wackytext.init({text='test3'}),
+  }
+
+  return props
+end
+
+function intro.update(props)
+  foreach(props.children, component.update)
+
+  return props
+end
+
+function intro.draw(props)
+  cls()
+  foreach(props.children, component.draw)
+end
+
+return intro
+end
+
+---file:
+__package_preload['main'] = function (...)
+require('colors')
+require('sprites')
+
+-- boilerplate
+
+__current_mode__ = nil
+__current_props__ = nil
+
+function set_mode(mode, initial_props)
+  __current_mode__ = mode
+  __current_props__ = mode.init(initial_props)
+end
+
+function _update()
+  __current_props__ = __current_mode__.update(__current_props__)
+end
+
+function _draw()
+  __current_mode__.draw(__current_props__)
+end
+
+intro = require('intro')
+starmap = require('starmap')
+faces = require('faces_test')
+
+-- end game mode
+
+function random_star()
+  local new_star = {
+    pos={x=rnd(128),y=rnd(128)},
+    visited=rnd(1)<0.05,
+    mission=rnd(1)<0.01,
+  }
+
+  return new_star
+end
+
+function times(n, func)
+  local ret = {}
+  for i=0,n do
+    add(ret, func())
+  end
+  return ret
+end
+
+function do_random_starmap()
+  local stars = times(80, random_star)
+  local current_star = stars[1+flr(rnd(#stars))]
+  current_star.visited = true
+  set_mode(starmap, {
+    player_pos=current_star.pos,
+    player_range=5 + rnd(40),
+    stars=stars
+  })
+end
+
+function _init()
+  set_mode(faces,{})
+end
+
 end
 --- require/dofile replacements
 

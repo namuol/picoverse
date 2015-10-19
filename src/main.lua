@@ -13,10 +13,6 @@ end
 
 function _update()
   __current_props__ = __current_mode__.update(__current_props__)
-
-  if btnp(4) then
-    do_random_starmap()
-  end
 end
 
 function _draw()
@@ -25,6 +21,7 @@ end
 
 intro = require('intro')
 starmap = require('starmap')
+faces = require('faces_test')
 
 -- end game mode
 
@@ -58,5 +55,5 @@ function do_random_starmap()
 end
 
 function _init()
-  do_random_starmap()
+  set_mode(faces,{})
 end

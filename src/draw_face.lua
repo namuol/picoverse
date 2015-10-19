@@ -1,25 +1,40 @@
 local skintones = {
-  indigo,
+  -- hooman colors:
+  brown,
+  brown,
   brown,
   peach,
+  peach,
+  peach,
+  white,
+  white,
+
+  -- alium colors:
+  indigo,
   blue,
   green,
-  white,
   red,
 }
 
 local hairtones = {
-  dark_purple,
-  light_gray,
-  dark_gray,
-  blue,
-  green,
-  dark_green,
+  -- orange,
   orange,
+  -- yellow,
   yellow,
+  -- white,
   white,
-  red,
+  -- brown,
   brown,
+  -- light_gray,
+  light_gray,
+  -- dark_gray,
+  dark_gray,
+
+  dark_purple,
+  blue,
+  -- green,
+  dark_green,
+  -- red,
 }
 
 function random_face_props()
@@ -33,7 +48,7 @@ function random_face_props()
   end
 
   local hair
-  if rnd(1) < 0.8 then
+  if rnd(1) < 0.9 then
     hair = sprites.hair + flr(rnd(sprites.facial_hair - sprites.hair))
   end
 
