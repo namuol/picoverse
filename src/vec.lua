@@ -6,6 +6,9 @@ local z = {x=0,y=0}
 
 function vec.norm(v)
   local len = dist(z, v)
+  if len <= 0 then
+    return {x=0,y=0}
+  end
   return {x=v.x/len,y=v.y/len}
 end
 

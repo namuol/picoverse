@@ -31,6 +31,7 @@ local hairtones = {
   dark_gray,
 
   dark_purple,
+  dark_blue,
   blue,
   -- green,
   dark_green,

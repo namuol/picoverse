@@ -5,6 +5,213 @@ __lua__
 __package_preload={}
 
 ---file:
+__package_preload['colors'] = function (...)
+black = 0
+dark_blue = 1
+dark_purple = 2
+dark_green = 3
+brown = 4
+dark_gray = 5
+light_gray = 6
+white = 7
+red = 8
+orange = 9
+yellow = 10
+green = 11
+blue = 12
+indigo = 13
+pink = 14
+peach = 15
+end
+
+---file:
+__package_preload['buttons'] = function (...)
+btn_left = 0
+btn_right = 1
+btn_up = 2
+btn_down = 3
+btn_a = 4
+btn_b = 5
+end
+
+---file:
+__package_preload['starmap'] = function (...)
+local dist = require('dist')
+local vec = require('vec')
+local make_tweener = require('make_tweener')
+
+function draw_star(props)
+  local color
+  local pos = props.star.pos
+  if dist(pos, props.player_pos) > props.player_range then
+    color = indigo
+  else
+    color = white
+  end
+
+  if props.star.visited then
+    circ(pos.x, pos.y, 2, indigo)
+  end
+
+  if props.star.mission then
+    circ(pos.x, pos.y, 2, yellow)
+  end
+
+  pset(pos.x, pos.y, color)
+end
+
+local starmap = {}
+
+function random_starmap_props()
+  local stars = times(80, random_star)
+  local current_star = stars[1+flr(rnd(#stars))]
+  current_star.visited = true
+  return {
+    player_pos=current_star.pos,
+    player_range=5 + rnd(40),
+    stars=stars,
+    dest_indicator_pos={x=0,y=0},
+    crosshair={
+      visible=true,
+      x=current_star.pos.x,
+      y=current_star.pos.y,
+    },
+    crosshair_speed=0.5,
+  }
+end
+
+local vec_tween = make_tweener({x=0.4,y=0.4})
+
+function starmap.init(props)
+  props = props or random_starmap_props()
+
+  vec_tween.init(props.dest_indicator_pos)
+  return props
+end
+
+function get_destination_star(stars, pos)
+  local closest
+  local min_dist = 9999
+
+  for i,star in pairs(stars) do
+    local d = dist(star.pos, pos)
+    if d < min_dist then
+      closest = star
+      min_dist = d
+      closest._dist = d
+    end
+  end
+
+  return closest
+end
+
+function starmap.update(props)
+  local crosshair_moved
+  local crosshair_v = {x=0,y=0}
+
+  if btn(btn_left) then
+    crosshair_v.x = -1
+    crosshair_moved = true
+  elseif btn(btn_right) then
+    crosshair_v.x = 1
+    crosshair_moved = true
+  end
+
+  if btn(btn_up) then
+    crosshair_v.y = -1
+    crosshair_moved = true
+  elseif btn(btn_down) then
+    crosshair_v.y = 1
+    crosshair_moved = true
+  end
+
+  crosshair_v = vec.mul(vec.norm(crosshair_v), props.crosshair_speed)
+  props.crosshair.x += crosshair_v.x
+  props.crosshair.y += crosshair_v.y
+
+  if not crosshair_moved then
+    props.crosshair_speed = 0.5
+    props.crosshair_held_time = 0
+  else
+    props.destination_star = get_destination_star(props.stars, props.crosshair)
+    props.crosshair_held_time += 1
+    props.dest_indicator_pos.x = props.destination_star.pos.x
+    props.dest_indicator_pos.y = props.destination_star.pos.y
+
+    if props.crosshair_held_time > 10 then
+      props.crosshair_speed = 2
+    elseif props.crosshair_held_time > 5 then
+      props.crosshair_speed = 1
+    end
+  end
+
+  vec_tween.tween(props.dest_indicator_pos)
+  return props
+end
+
+function starmap.draw(props)
+  cls()
+  
+  circfill(props.player_pos.x, props.player_pos.y, props.player_range, dark_blue)
+
+  if props.destination_star then
+
+    if dist(props.player_pos, props.destination_star.pos) > props.player_range then   
+      line(props.player_pos.x, props.player_pos.y, props.dest_indicator_pos._x, props.dest_indicator_pos._y, dark_blue)
+      local pos = {x=props.dest_indicator_pos._x,y=props.dest_indicator_pos._y}
+      local dir = vec.norm(vec.sub(pos, props.player_pos))
+      local edge = vec.add(props.player_pos, vec.mul(dir, props.player_range))
+      line(props.player_pos.x, props.player_pos.y, edge.x, edge.y, blue)
+    else
+      line(props.player_pos.x, props.player_pos.y, props.dest_indicator_pos._x, props.dest_indicator_pos._y, blue)
+    end
+  end
+  
+  for n,star in pairs(props.stars) do
+    local star = props.stars[n]
+    draw_star({
+      star=star,
+      player_pos=props.player_pos,
+      player_range=props.player_range,
+    })
+  end
+
+  spr(sprites.current_indicator, props.player_pos.x-3, props.player_pos.y-9)
+
+  if props.crosshair.visible then
+    spr(sprites.crosshair, props.crosshair.x-3, props.crosshair.y-3)
+  end
+
+  if props.destination_star then
+    local ind
+    
+    if dist(props.player_pos, props.destination_star.pos) > props.player_range then
+      ind = sprites.destination_indicator
+    else
+      ind = sprites.destination_indicator-1
+    end
+
+    spr(ind, props.dest_indicator_pos._x-3, props.dest_indicator_pos._y-9)
+  end
+end
+
+return starmap
+end
+
+---file:
+__package_preload['sprites'] = function (...)
+sprites = {
+  current_indicator=16,
+  destination_indicator=18,
+  crosshair=19,
+  
+  face=80,
+  hair=81,
+  facial_hair=85,
+}
+end
+
+---file:
 __package_preload['main'] = function (...)
 require('colors')
 require('sprites')
@@ -28,7 +235,6 @@ function _draw()
   __current_mode__.draw(__current_props__)
 end
 
-intro = require('intro')
 starmap = require('starmap')
 faces = require('faces_test')
 
@@ -57,6 +263,37 @@ function _init()
   -- do_random_starmap()
 end
 
+end
+
+---file:
+__package_preload['vec'] = function (...)
+local dist = require('dist')
+
+local vec = {}
+
+local z = {x=0,y=0}
+
+function vec.norm(v)
+  local len = dist(z, v)
+  if len <= 0 then
+    return {x=0,y=0}
+  end
+  return {x=v.x/len,y=v.y/len}
+end
+
+function vec.mul(v, s)
+  return {x=v.x*s,y=v.y*s}
+end
+
+function vec.add(a, b)
+  return {x=a.x+b.x,y=a.y+b.y}
+end
+
+function vec.sub(a, b)
+  return {x=a.x-b.x,y=a.y-b.y}
+end
+
+return vec
 end
 
 ---file:
@@ -94,6 +331,7 @@ local hairtones = {
   dark_gray,
 
   dark_purple,
+  dark_blue,
   blue,
   -- green,
   dark_green,
@@ -153,75 +391,56 @@ return draw_face
 end
 
 ---file:
-__package_preload['vec'] = function (...)
-local dist = require('dist')
+__package_preload['planetmap'] = function (...)
+local planetmap = {}
 
-local vec = {}
-
-local z = {x=0,y=0}
-
-function vec.norm(v)
-  local len = dist(z, v)
-  return {x=v.x/len,y=v.y/len}
+function random_planet_props()
 end
 
-function vec.mul(v, s)
-  return {x=v.x*s,y=v.y*s}
+function planetmap.init(props)
+  return props
 end
 
-function vec.add(a, b)
-  return {x=a.x+b.x,y=a.y+b.y}
+function planetmap.update(props)
+  return props
 end
 
-function vec.sub(a, b)
-  return {x=a.x-b.x,y=a.y-b.y}
+function planetmap.draw(props)
+  cls()
+  for n,planet in pairs(props.planets) do
+    local planet = props.planets[n]
+    draw_planet({
+      planet=planet,
+    })
+  end
 end
 
-return vec
-end
-
----file:
-__package_preload['colors'] = function (...)
-black = 0
-dark_blue = 1
-dark_purple = 2
-dark_green = 3
-brown = 4
-dark_gray = 5
-light_gray = 6
-white = 7
-red = 8
-orange = 9
-yellow = 10
-green = 11
-blue = 12
-indigo = 13
-pink = 14
-peach = 15
+return planetmap
 end
 
 ---file:
-__package_preload['dist'] = function (...)
-function dist(a,b)
-  local dx = b.x-a.x
-  local dy = b.y-a.y
-  return sqrt(dx*dx + dy*dy)
+__package_preload['make_tweener'] = function (...)
+return function(amts)
+  local tweener = {}
+
+  function tweener.init(props)
+    -- initialize default vals
+    for p,amt in pairs(amts) do
+      props['_'..p] = props[p]
+    end
+  end
+
+  function tweener.tween(props)
+    for p,amt in pairs(amts) do
+      local _p = '_'..p
+      local v = props[_p]
+      props[_p] += (props[p] - v) * amt
+    end
+  end
+
+  return tweener
 end
 
-return dist
-end
-
----file:
-__package_preload['sprites'] = function (...)
-sprites = {
-  current_indicator=16,
-  destination_indicator=18,
-  crosshair=19,
-  
-  face=80,
-  hair=81,
-  facial_hair=85,
-}
 end
 
 ---file:
@@ -263,278 +482,14 @@ return faces
 end
 
 ---file:
-__package_preload['wackytext'] = function (...)
-component = require('component')
-make_tweener = require('make_tweener')
-
-funcs = nil
-
-tweener = make_tweener({x=0.1, y=0.1})
-
-function init(props)
-  props.text = props.text or 'wacky'
-  props.color = props.color or rnd(16)
-  props.x = props.x or rnd(128)
-  props.y = props.y or rnd(128)
-  
-  tweener.init(props)
-
-  return {
-    props=props,
-    funcs=funcs,
-  }
+__package_preload['dist'] = function (...)
+function dist(a,b)
+  local dx = b.x-a.x
+  local dy = b.y-a.y
+  return sqrt(dx*dx + dy*dy)
 end
 
-function update(props)
-  props.color = props.color + 1 % 16
-  
-  if (rnd(1) < 0.02) then
-    props.x = rnd(128)
-    props.y = rnd(128)
-  end
-
-  tweener.tween(props)
-
-  return props
-end
-
-function draw(props)
-  color(props.color)
-  print(props.text, props._x, props._y)
-end
-
-funcs = component.create(init,update,draw)
-
-return funcs
-end
-
----file:
-__package_preload['starmap'] = function (...)
-local component = require('component')
-local dist = require('dist')
-local vec = require('vec')
-
-function draw_star(props)
-  local color
-  local pos = props.star.pos
-  if dist(pos, props.player_pos) > props.player_range then
-    color = indigo
-  else
-    color = white
-  end
-
-  if props.star.visited then
-    circ(pos.x, pos.y, 2, indigo)
-  end
-
-  if props.star.mission then
-    circ(pos.x, pos.y, 2, yellow)
-  end
-
-  pset(pos.x, pos.y, color)
-end
-
-starmap = {}
-
-function random_starmap_props()
-  local stars = times(80, random_star)
-  local current_star = stars[1+flr(rnd(#stars))]
-  current_star.visited = true
-  return {
-    player_pos=current_star.pos,
-    player_range=5 + rnd(40),
-    stars=stars,
-    crosshair={
-      visible=true,
-      x=current_star.pos.x,
-      y=current_star.pos.y,
-    }
-  }
-end
-
-function starmap.init(props)
-  return props or random_starmap_props()
-end
-
-function get_destination_star(stars, pos)
-  local closest
-  local min_dist = 9999
-
-  for i,star in pairs(stars) do
-    local d = dist(star.pos, pos)
-    if d < min_dist then
-      closest = star
-      min_dist = d
-      closest._dist = d
-    end
-  end
-
-  return closest
-end
-
-function starmap.update(props)
-  local crosshair_moved
-
-  if btn(btn_left) then
-    props.crosshair.x -= 1
-    crosshair_moved = true
-  elseif btn(btn_right) then
-    props.crosshair.x += 1
-    crosshair_moved = true
-  end
-
-  if btn(btn_up) then
-    props.crosshair.y -= 1
-    crosshair_moved = true
-  elseif btn(btn_down) then
-    props.crosshair.y += 1
-    crosshair_moved = true
-  end
-
-  if crosshair_moved then
-    props.destination_star = get_destination_star(props.stars, props.crosshair)
-  end
-
-  return props
-end
-
-function starmap.draw(props)
-  cls()
-  
-  circfill(props.player_pos.x, props.player_pos.y, props.player_range, dark_blue)
-
-  if props.destination_star then
-
-    if dist(props.player_pos, props.destination_star.pos) > props.player_range then   
-      line(props.player_pos.x, props.player_pos.y, props.destination_star.pos.x, props.destination_star.pos.y, dark_blue)
-      local dir = vec.norm(vec.sub(props.destination_star.pos, props.player_pos))
-      local edge = vec.add(props.player_pos, vec.mul(dir, props.player_range))
-      line(props.player_pos.x, props.player_pos.y, edge.x, edge.y, blue)
-    else
-      line(props.player_pos.x, props.player_pos.y, props.destination_star.pos.x, props.destination_star.pos.y, blue)
-    end
-  end
-  
-  for n,star in pairs(props.stars) do
-    local star = props.stars[n]
-    draw_star({
-      star=star,
-      player_pos=props.player_pos,
-      player_range=props.player_range,
-    })
-  end
-
-  spr(sprites.current_indicator, props.player_pos.x-3, props.player_pos.y-9)
-
-  if props.crosshair.visible then
-    spr(sprites.crosshair, props.crosshair.x-3, props.crosshair.y-3)
-  end
-
-  if props.destination_star then
-    local ind
-    
-    if dist(props.player_pos, props.destination_star.pos) > props.player_range then
-      ind = sprites.destination_indicator
-    else
-      ind = sprites.destination_indicator-1
-    end 
-
-    spr(ind, props.destination_star.pos.x-3, props.destination_star.pos.y-9)
-  end
-end
-
-return starmap
-end
-
----file:
-__package_preload['make_tweener'] = function (...)
-return function(amts)
-  local tweener = {}
-
-  function tweener.init(props)
-    -- initialize default vals
-    for p,amt in pairs(amts) do
-      props['_'..p] = props[p]
-    end
-  end
-
-  function tweener.tween(props)
-    for p,amt in pairs(amts) do
-      local _p = '_'..p
-      local v = props[_p]
-      props[_p] += (props[p] - v) * amt
-    end
-  end
-
-  return tweener
-end
-
-end
-
----file:
-__package_preload['component'] = function (...)
-function update(c)
-  c.props = c.funcs.update(c.props)
-end
-
-function draw(c)
-  c.funcs.draw(c.props)
-end
-
-function create(init,update,draw)
-  return {
-    init=init,
-    update=update,
-    draw=draw,
-  }
-end
-
-return {
-  create=create,
-  update=update,
-  draw=draw,
-}
-end
-
----file:
-__package_preload['buttons'] = function (...)
-btn_left = 0
-btn_right = 1
-btn_up = 2
-btn_down = 3
-btn_a = 4
-btn_b = 5
-end
-
----file:
-__package_preload['intro'] = function (...)
-component = require('component')
-wackytext = require('wackytext')
-
-intro = {}
-
-function intro.init(props)
-  props.children = props.children or {
-    wackytext.init({text='test1'}),
-    wackytext.init({text='test2'}),
-    wackytext.init({text='test3'}),
-  }
-
-  return props
-end
-
-function intro.update(props)
-  foreach(props.children, component.update)
-
-  return props
-end
-
-function intro.draw(props)
-  cls()
-  foreach(props.children, component.draw)
-end
-
-return intro
+return dist
 end
 --- require/dofile replacements
 

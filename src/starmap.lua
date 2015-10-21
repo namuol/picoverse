@@ -1,6 +1,6 @@
-local component = require('component')
 local dist = require('dist')
 local vec = require('vec')
+local make_tweener = require('make_tweener')
 
 function draw_star(props)
   local color
@@ -22,7 +22,7 @@ function draw_star(props)
   pset(pos.x, pos.y, color)
 end
 
-starmap = {}
+local starmap = {}
 
 function random_starmap_props()
   local stars = times(80, random_star)
@@ -32,16 +32,23 @@ function random_starmap_props()
     player_pos=current_star.pos,
     player_range=5 + rnd(40),
     stars=stars,
+    dest_indicator_pos={x=0,y=0},
     crosshair={
       visible=true,
       x=current_star.pos.x,
       y=current_star.pos.y,
-    }
+    },
+    crosshair_speed=0.5,
   }
 end
 
+local vec_tween = make_tweener({x=0.4,y=0.4})
+
 function starmap.init(props)
-  return props or random_starmap_props()
+  props = props or random_starmap_props()
+
+  vec_tween.init(props.dest_indicator_pos)
+  return props
 end
 
 function get_destination_star(stars, pos)
@@ -62,27 +69,45 @@ end
 
 function starmap.update(props)
   local crosshair_moved
+  local crosshair_v = {x=0,y=0}
 
   if btn(btn_left) then
-    props.crosshair.x -= 1
+    crosshair_v.x = -1
     crosshair_moved = true
   elseif btn(btn_right) then
-    props.crosshair.x += 1
+    crosshair_v.x = 1
     crosshair_moved = true
   end
 
   if btn(btn_up) then
-    props.crosshair.y -= 1
+    crosshair_v.y = -1
     crosshair_moved = true
   elseif btn(btn_down) then
-    props.crosshair.y += 1
+    crosshair_v.y = 1
     crosshair_moved = true
   end
 
-  if crosshair_moved then
+  crosshair_v = vec.mul(vec.norm(crosshair_v), props.crosshair_speed)
+  props.crosshair.x += crosshair_v.x
+  props.crosshair.y += crosshair_v.y
+
+  if not crosshair_moved then
+    props.crosshair_speed = 0.5
+    props.crosshair_held_time = 0
+  else
     props.destination_star = get_destination_star(props.stars, props.crosshair)
+    props.crosshair_held_time += 1
+    props.dest_indicator_pos.x = props.destination_star.pos.x
+    props.dest_indicator_pos.y = props.destination_star.pos.y
+
+    if props.crosshair_held_time > 10 then
+      props.crosshair_speed = 2
+    elseif props.crosshair_held_time > 5 then
+      props.crosshair_speed = 1
+    end
   end
 
+  vec_tween.tween(props.dest_indicator_pos)
   return props
 end
 
@@ -94,12 +119,13 @@ function starmap.draw(props)
   if props.destination_star then
 
     if dist(props.player_pos, props.destination_star.pos) > props.player_range then   
-      line(props.player_pos.x, props.player_pos.y, props.destination_star.pos.x, props.destination_star.pos.y, dark_blue)
-      local dir = vec.norm(vec.sub(props.destination_star.pos, props.player_pos))
+      line(props.player_pos.x, props.player_pos.y, props.dest_indicator_pos._x, props.dest_indicator_pos._y, dark_blue)
+      local pos = {x=props.dest_indicator_pos._x,y=props.dest_indicator_pos._y}
+      local dir = vec.norm(vec.sub(pos, props.player_pos))
       local edge = vec.add(props.player_pos, vec.mul(dir, props.player_range))
       line(props.player_pos.x, props.player_pos.y, edge.x, edge.y, blue)
     else
-      line(props.player_pos.x, props.player_pos.y, props.destination_star.pos.x, props.destination_star.pos.y, blue)
+      line(props.player_pos.x, props.player_pos.y, props.dest_indicator_pos._x, props.dest_indicator_pos._y, blue)
     end
   end
   
@@ -125,9 +151,9 @@ function starmap.draw(props)
       ind = sprites.destination_indicator
     else
       ind = sprites.destination_indicator-1
-    end 
+    end
 
-    spr(ind, props.destination_star.pos.x-3, props.destination_star.pos.y-9)
+    spr(ind, props.dest_indicator_pos._x-3, props.dest_indicator_pos._y-9)
   end
 end
 

@@ -20,7 +20,6 @@ function _draw()
   __current_mode__.draw(__current_props__)
 end
 
-intro = require('intro')
 starmap = require('starmap')
 faces = require('faces_test')
 
