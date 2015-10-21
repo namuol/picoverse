@@ -5,105 +5,6 @@ __lua__
 __package_preload={}
 
 ---file:
-__package_preload['main'] = function (...)
-require('colors')
-require('sprites')
-require('buttons')
-
--- boilerplate
-
-__current_mode__ = nil
-__current_props__ = nil
-
-function set_mode(mode, initial_props)
-  __current_mode__ = mode
-  __current_props__ = mode.init(initial_props)
-end
-
-function _update()
-  __current_props__ = __current_mode__.update(__current_props__)
-end
-
-function _draw()
-  __current_mode__.draw(__current_props__)
-end
-
-starmap = require('starmap')
-faces = require('faces_test')
-
--- end game mode
-
-function random_star()
-  local new_star = {
-    pos={x=rnd(128),y=rnd(128)},
-    visited=rnd(1)<0.05,
-    mission=rnd(1)<0.01,
-  }
-
-  return new_star
-end
-
-function times(n, func)
-  local ret = {}
-  for i=0,n do
-    add(ret, func())
-  end
-  return ret
-end
-
-function _init()
-  set_mode(starmap)
-  -- do_random_starmap()
-end
-
-end
-
----file:
-__package_preload['clamp'] = function (...)
-return function(x,mn,mx)
-  return min(mx,max(x,mn))
-end
-end
-
----file:
-__package_preload['faces_test'] = function (...)
-local draw_face = require('draw_face')
-
-function draw_random_faces()
-  cls()
-  for n=0,14*14 - 1 do
-    draw_face(nil, (n % 14)*9, flr(n/14)*9)
-  end
-end
-
-local faces = {}
-
-function faces.init(props)
-  draw_random_faces()
-  return {
-    redraw=false
-  }
-end
-
-function faces.update(props)
-  if btnp(4) then
-    props.redraw = true
-  else
-    props.redraw = false
-  end
-  return props
-end
-
-function faces.draw(props)
-  if props.redraw then
-    draw_random_faces()
-  end
-end
-
-return faces
-end
-
----file:
 __package_preload['dist'] = function (...)
 function dist(a,b)
   local dx = b.x-a.x
@@ -115,16 +16,26 @@ return dist
 end
 
 ---file:
-__package_preload['sprites'] = function (...)
-sprites = {
-  current_indicator=16,
-  destination_indicator=18,
-  crosshair=19,
-  
-  face=80,
-  hair=81,
-  facial_hair=85,
-}
+__package_preload['make_tweener'] = function (...)
+return function(amts, props)
+  local tweener = {}
+  tweener.vals = {}
+
+  -- initialize default vals
+  for p,amt in pairs(amts) do
+    tweener.vals[p] = props[p]
+  end
+
+  function tweener.tween(props)
+    for p,amt in pairs(amts) do
+      local v = tweener.vals[p]
+      tweener.vals[p] += (props[p] - v) * amt
+    end
+  end
+
+  return tweener
+end
+
 end
 
 ---file:
@@ -133,6 +44,7 @@ local dist = require('dist')
 local vec = require('vec')
 local make_tweener = require('make_tweener')
 local clamp = require('clamp')
+local times = require('times')
 
 function draw_star(props)
   local color
@@ -162,7 +74,7 @@ function random_starmap_props()
   current_star.visited = true
   return {
     player_pos=current_star.pos,
-    player_range=5 + rnd(40),
+    player_range=20 + rnd(80),
     stars=stars,
     dest_indicator_pos={x=current_star.pos.x,y=current_star.pos.y},
     crosshair={
@@ -291,6 +203,13 @@ return starmap
 end
 
 ---file:
+__package_preload['choose'] = function (...)
+return function(arr)
+  return arr[1+flr(rnd(#arr))]
+end
+end
+
+---file:
 __package_preload['colors'] = function (...)
 black = 0
 dark_blue = 1
@@ -308,6 +227,15 @@ blue = 12
 indigo = 13
 pink = 14
 peach = 15
+end
+
+---file:
+__package_preload['sprites'] = function (...)
+sprites = {
+  current_indicator=16,
+  destination_indicator=18,
+  crosshair=19,
+}
 end
 
 ---file:
@@ -352,31 +280,267 @@ return vec
 end
 
 ---file:
-__package_preload['make_tweener'] = function (...)
-return function(amts, props)
-  local tweener = {}
-  tweener.vals = {}
+__package_preload['main'] = function (...)
+require('colors')
+require('sprites')
+require('buttons')
 
-  -- initialize default vals
-  for p,amt in pairs(amts) do
-    tweener.vals[p] = props[p]
-  end
+-- boilerplate
 
-  function tweener.tween(props)
-    for p,amt in pairs(amts) do
-      local v = tweener.vals[p]
-      tweener.vals[p] += (props[p] - v) * amt
-    end
-  end
+__current_mode__ = nil
+__current_props__ = nil
 
-  return tweener
+function set_mode(mode, initial_props)
+  __current_mode__ = mode
+  __current_props__ = mode.init(initial_props)
+end
+
+function _update()
+  __current_props__ = __current_mode__.update(__current_props__)
+end
+
+function _draw()
+  __current_mode__.draw(__current_props__)
+end
+
+starmap = require('starmap')
+faces = require('faces_test')
+planetmap = require('planetmap')
+
+-- end game mode
+
+function random_star()
+  local new_star = {
+    pos={x=rnd(128),y=rnd(128)},
+    visited=rnd(1)<0.05,
+    mission=rnd(1)<0.01,
+  }
+
+  return new_star
+end
+
+function _init()
+  set_mode(planetmap)
+  -- do_random_starmap()
 end
 
 end
 
 ---file:
+__package_preload['times'] = function (...)
+return function(n, func)
+  local ret = {}
+  for i=0,n do
+    add(ret, func())
+  end
+  return ret
+end
+
+end
+
+---file:
+__package_preload['clamp'] = function (...)
+return function(x,mn,mx)
+  return min(mx,max(x,mn))
+end
+end
+
+---file:
+__package_preload['planetmap'] = function (...)
+local dist = require('dist')
+local vec = require('vec')
+local make_tweener = require('make_tweener')
+local clamp = require('clamp')
+local times = require('times')
+local choose = require('choose')
+
+local planetmap = {}
+
+local planet_count_probs = {
+  1,1,
+  2,2,2,
+  3,3,3,3,
+  4,4,4,
+  5,5,
+  6,6
+}
+
+local planet_color_probs = {
+  light_gray,
+  light_gray,
+  light_gray,
+  light_gray,
+
+  brown,
+  brown,
+
+  dark_gray,
+  dark_gray,
+  dark_gray,
+
+  dark_green,
+  dark_green,
+
+  dark_purple,
+  pink,  
+  green,
+  orange,
+}
+
+local planet_size_probs = {
+  3,3,3,
+  5,5,5,5,5,5,
+
+  -- 6,6,6,6,6,6,
+  7,7,7
+}
+
+local moon_count_probs = {
+  0,0,0,0,
+  1,1,1,1,1,
+  2,2,2,
+  3,3,
+}
+
+local moon_color_probs = {
+  light_gray,
+  light_gray,
+  light_gray,
+  light_gray,
+  light_gray,
+  light_gray,
+  light_gray,
+
+  brown,
+  brown,
+  brown,
+  brown,
+
+  dark_gray,
+  dark_gray,
+  dark_gray,
+  dark_gray,
+
+  dark_green,
+  dark_green,
+
+  green,
+  green,
+  green,
+  green,
+  green,
+  blue,
+  blue,
+  blue,
+  blue,
+  blue,
+  blue,
+}
+
+local moon_size_probs = {
+  1,1,1,1,1,1,1,1,
+  2,2,2,2,2,2,2,2,2,2,
+  -- 3,3,3,
+}
+
+function random_moon_props()
+  return {
+    size=choose(moon_size_probs),
+    color=choose(moon_color_probs),
+  }
+end
+
+function random_planet_props()
+  return {
+    color=choose(planet_color_probs),
+    size=choose(planet_size_probs),
+    moons=times(choose(moon_count_probs), random_moon_props),
+  }
+end
+
+function random_planetmap_props()
+  return {
+    planets=times(choose(planet_count_probs), random_planet_props)
+  }
+end
+
+function planetmap.init(props)
+  props = props or random_planetmap_props()
+  return props
+end
+
+function planetmap.update(props)
+  return props
+end
+
+function draw_planet(props,x,y)
+  -- printh(x)
+  -- printh(y)
+  -- printh(props.size)
+  -- printh(props.color)
+  circfill(x, y, props.size, props.color)
+  -- circfill(x, y, 4, pink)
+end
+
+function planetmap.draw(props)
+  cls()
+  local top = 1
+  for n,planet in pairs(props.planets) do
+    top += planet.size
+    draw_planet(planet, 7, top)
+    local left = 3 + planet.size
+    for m,moon in pairs(planet.moons) do
+      left += moon.size
+      draw_planet(moon, 7 + left, top)
+      left += moon.size + 3
+    end
+    top += planet.size + 3
+  end
+end
+
+return planetmap
+end
+
+---file:
 __package_preload['draw_face'] = function (...)
-local skintones = {
+local choose = require('choose')
+
+local face_probs = {
+  80
+}
+
+local hair_probs = {
+  0,
+  81,
+  81,
+  81,
+  82,
+  82,
+  82,
+  83,
+  83,
+  83,
+  84,
+  84,
+  84,
+}
+
+local facial_hair_probs = {
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  85,
+  86,
+  87,
+  88,
+}
+
+local skintone_probs = {
   -- hooman colors:
   brown,
   brown,
@@ -394,7 +558,7 @@ local skintones = {
   red,
 }
 
-local hairtones = {
+local hairtone_probs = {
   -- orange,
   orange,
   -- yellow,
@@ -417,30 +581,19 @@ local hairtones = {
 }
 
 function random_face_props()
-  local skintone_idx = flr(rnd(#skintones))
-  local skintone = skintones[1 + skintone_idx]
+  local skintone = choose(skintone_probs)
 
   local hairtone = skintone
-  
   while hairtone == skintone do
-    hairtone = hairtones[1 + flr(rnd(#hairtones))]
-  end
-
-  local hair
-  if rnd(1) < 0.9 then
-    hair = sprites.hair + flr(rnd(sprites.facial_hair - sprites.hair))
-  end
-
-  local facial_hair
-  if rnd(1) < 0.25 then
-    facial_hair = sprites.facial_hair + flr(rnd(4))
+    hairtone = choose(hairtone_probs)
   end
 
   return {
     skintone=skintone,
     hairtone=hairtone,
-    hair=hair,
-    facial_hair=facial_hair,
+    hair=choose(hair_probs),
+    facial_hair=choose(facial_hair_probs),
+    face=choose(face_probs)
   }
 end
 
@@ -450,7 +603,7 @@ function draw_face(props,x,y)
   end
 
   pal(red, props.skintone)
-  spr(sprites.face, x, y)
+  spr(props.face, x, y)
 
   if props.hair then
     pal(red, props.hairtone)
@@ -466,6 +619,44 @@ function draw_face(props,x,y)
 end
 
 return draw_face
+end
+
+---file:
+__package_preload['faces_test'] = function (...)
+local draw_face = require('draw_face')
+
+function draw_random_faces()
+  cls()
+  for n=0,14*14 - 1 do
+    draw_face(nil, (n % 14)*9, flr(n/14)*9)
+  end
+end
+
+local faces = {}
+
+function faces.init(props)
+  draw_random_faces()
+  return {
+    redraw=false
+  }
+end
+
+function faces.update(props)
+  if btnp(4) then
+    props.redraw = true
+  else
+    props.redraw = false
+  end
+  return props
+end
+
+function faces.draw(props)
+  if props.redraw then
+    draw_random_faces()
+  end
+end
+
+return faces
 end
 --- require/dofile replacements
 

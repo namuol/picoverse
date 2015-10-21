@@ -1,4 +1,41 @@
-local skintones = {
+local choose = require('choose')
+
+local face_probs = {
+  80
+}
+
+local hair_probs = {
+  0,
+  81,
+  81,
+  81,
+  82,
+  82,
+  82,
+  83,
+  83,
+  83,
+  84,
+  84,
+  84,
+}
+
+local facial_hair_probs = {
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  85,
+  86,
+  87,
+  88,
+}
+
+local skintone_probs = {
   -- hooman colors:
   brown,
   brown,
@@ -16,7 +53,7 @@ local skintones = {
   red,
 }
 
-local hairtones = {
+local hairtone_probs = {
   -- orange,
   orange,
   -- yellow,
@@ -39,30 +76,19 @@ local hairtones = {
 }
 
 function random_face_props()
-  local skintone_idx = flr(rnd(#skintones))
-  local skintone = skintones[1 + skintone_idx]
+  local skintone = choose(skintone_probs)
 
   local hairtone = skintone
-  
   while hairtone == skintone do
-    hairtone = hairtones[1 + flr(rnd(#hairtones))]
-  end
-
-  local hair
-  if rnd(1) < 0.9 then
-    hair = sprites.hair + flr(rnd(sprites.facial_hair - sprites.hair))
-  end
-
-  local facial_hair
-  if rnd(1) < 0.25 then
-    facial_hair = sprites.facial_hair + flr(rnd(4))
+    hairtone = choose(hairtone_probs)
   end
 
   return {
     skintone=skintone,
     hairtone=hairtone,
-    hair=hair,
-    facial_hair=facial_hair,
+    hair=choose(hair_probs),
+    facial_hair=choose(facial_hair_probs),
+    face=choose(face_probs)
   }
 end
 
@@ -72,7 +98,7 @@ function draw_face(props,x,y)
   end
 
   pal(red, props.skintone)
-  spr(sprites.face, x, y)
+  spr(props.face, x, y)
 
   if props.hair then
     pal(red, props.hairtone)

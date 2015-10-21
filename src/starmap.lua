@@ -2,6 +2,7 @@ local dist = require('dist')
 local vec = require('vec')
 local make_tweener = require('make_tweener')
 local clamp = require('clamp')
+local times = require('times')
 
 function draw_star(props)
   local color
@@ -31,7 +32,7 @@ function random_starmap_props()
   current_star.visited = true
   return {
     player_pos=current_star.pos,
-    player_range=5 + rnd(40),
+    player_range=20 + rnd(80),
     stars=stars,
     dest_indicator_pos={x=current_star.pos.x,y=current_star.pos.y},
     crosshair={

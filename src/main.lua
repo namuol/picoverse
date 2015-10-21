@@ -22,6 +22,7 @@ end
 
 starmap = require('starmap')
 faces = require('faces_test')
+planetmap = require('planetmap')
 
 -- end game mode
 
@@ -35,15 +36,7 @@ function random_star()
   return new_star
 end
 
-function times(n, func)
-  local ret = {}
-  for i=0,n do
-    add(ret, func())
-  end
-  return ret
-end
-
 function _init()
-  set_mode(starmap)
+  set_mode(planetmap)
   -- do_random_starmap()
 end
