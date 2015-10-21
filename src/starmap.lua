@@ -1,6 +1,7 @@
 local dist = require('dist')
 local vec = require('vec')
 local make_tweener = require('make_tweener')
+local clamp = require('clamp')
 
 function draw_star(props)
   local color
@@ -32,7 +33,7 @@ function random_starmap_props()
     player_pos=current_star.pos,
     player_range=5 + rnd(40),
     stars=stars,
-    dest_indicator_pos={x=0,y=0},
+    dest_indicator_pos={x=current_star.pos.x,y=current_star.pos.y},
     crosshair={
       visible=true,
       x=current_star.pos.x,
@@ -42,12 +43,11 @@ function random_starmap_props()
   }
 end
 
-local vec_tween = make_tweener({x=0.4,y=0.4})
 
 function starmap.init(props)
   props = props or random_starmap_props()
 
-  vec_tween.init(props.dest_indicator_pos)
+  props.dest_indicator_pos_tween = make_tweener({x=0.4,y=0.4}, props.dest_indicator_pos)
   return props
 end
 
@@ -88,8 +88,8 @@ function starmap.update(props)
   end
 
   crosshair_v = vec.mul(vec.norm(crosshair_v), props.crosshair_speed)
-  props.crosshair.x += crosshair_v.x
-  props.crosshair.y += crosshair_v.y
+  props.crosshair.x = clamp(props.crosshair.x+crosshair_v.x, 0,127)
+  props.crosshair.y = clamp(props.crosshair.y+crosshair_v.y, 0,127)
 
   if not crosshair_moved then
     props.crosshair_speed = 0.5
@@ -97,8 +97,7 @@ function starmap.update(props)
   else
     props.destination_star = get_destination_star(props.stars, props.crosshair)
     props.crosshair_held_time += 1
-    props.dest_indicator_pos.x = props.destination_star.pos.x
-    props.dest_indicator_pos.y = props.destination_star.pos.y
+    props.dest_indicator_pos = props.destination_star.pos
 
     if props.crosshair_held_time > 10 then
       props.crosshair_speed = 2
@@ -107,7 +106,7 @@ function starmap.update(props)
     end
   end
 
-  vec_tween.tween(props.dest_indicator_pos)
+  props.dest_indicator_pos_tween.tween(props.dest_indicator_pos)
   return props
 end
 
@@ -119,13 +118,13 @@ function starmap.draw(props)
   if props.destination_star then
 
     if dist(props.player_pos, props.destination_star.pos) > props.player_range then   
-      line(props.player_pos.x, props.player_pos.y, props.dest_indicator_pos._x, props.dest_indicator_pos._y, dark_blue)
-      local pos = {x=props.dest_indicator_pos._x,y=props.dest_indicator_pos._y}
+      line(props.player_pos.x, props.player_pos.y, props.dest_indicator_pos_tween.vals.x, props.dest_indicator_pos_tween.vals.y, dark_blue)
+      local pos = {x=props.dest_indicator_pos_tween.vals.x,y=props.dest_indicator_pos_tween.vals.y}
       local dir = vec.norm(vec.sub(pos, props.player_pos))
       local edge = vec.add(props.player_pos, vec.mul(dir, props.player_range))
       line(props.player_pos.x, props.player_pos.y, edge.x, edge.y, blue)
     else
-      line(props.player_pos.x, props.player_pos.y, props.dest_indicator_pos._x, props.dest_indicator_pos._y, blue)
+      line(props.player_pos.x, props.player_pos.y, props.dest_indicator_pos_tween.vals.x, props.dest_indicator_pos_tween.vals.y, blue)
     end
   end
   
@@ -153,7 +152,7 @@ function starmap.draw(props)
       ind = sprites.destination_indicator-1
     end
 
-    spr(ind, props.dest_indicator_pos._x-3, props.dest_indicator_pos._y-9)
+    spr(ind, props.dest_indicator_pos_tween.vals.x-3, props.dest_indicator_pos_tween.vals.y-9)
   end
 end
 
