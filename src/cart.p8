@@ -5,37 +5,130 @@ __lua__
 __package_preload={}
 
 ---file:
-__package_preload['dist'] = function (...)
-function dist(a,b)
-  local dx = b.x-a.x
-  local dy = b.y-a.y
-  return sqrt(dx*dx + dy*dy)
+__package_preload['clamp'] = function (...)
+return function(x,mn,mx)
+  return min(mx,max(x,mn))
 end
-
-return dist
 end
 
 ---file:
-__package_preload['make_tweener'] = function (...)
-return function(amts, props)
-  local tweener = {}
-  tweener.vals = {}
+__package_preload['draw_face'] = function (...)
+local choose = require('choose')
 
-  -- initialize default vals
-  for p,amt in pairs(amts) do
-    tweener.vals[p] = props[p]
+local face_probs = {
+  80
+}
+
+local hair_probs = {
+  0,
+  81,
+  81,
+  81,
+  82,
+  82,
+  82,
+  83,
+  83,
+  83,
+  84,
+  84,
+  84,
+}
+
+local facial_hair_probs = {
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  85,
+  86,
+  87,
+  88,
+}
+
+local skintone_probs = {
+  -- hooman colors:
+  brown,
+  brown,
+  brown,
+  peach,
+  peach,
+  peach,
+  white,
+  white,
+
+  -- alium colors:
+  indigo,
+  blue,
+  green,
+  red,
+}
+
+local hairtone_probs = {
+  -- orange,
+  orange,
+  -- yellow,
+  yellow,
+  -- white,
+  white,
+  -- brown,
+  brown,
+  -- light_gray,
+  light_gray,
+  -- dark_gray,
+  dark_gray,
+
+  dark_purple,
+  dark_blue,
+  blue,
+  -- green,
+  dark_green,
+  -- red,
+}
+
+function random_face_props()
+  local skintone = choose(skintone_probs)
+
+  local hairtone = skintone
+  while hairtone == skintone do
+    hairtone = choose(hairtone_probs)
   end
 
-  function tweener.tween(props)
-    for p,amt in pairs(amts) do
-      local v = tweener.vals[p]
-      tweener.vals[p] += (props[p] - v) * amt
-    end
-  end
-
-  return tweener
+  return {
+    skintone=skintone,
+    hairtone=hairtone,
+    hair=choose(hair_probs),
+    facial_hair=choose(facial_hair_probs),
+    face=choose(face_probs)
+  }
 end
 
+function draw_face(props,x,y)
+  if not props then
+    props = random_face_props()
+  end
+
+  pal(red, props.skintone)
+  spr(props.face, x, y)
+
+  if props.hair then
+    pal(red, props.hairtone)
+    spr(props.hair, x, y)
+  end
+
+  if props.facial_hair then
+    pal(red, props.hairtone)
+    spr(props.facial_hair, x, y)
+  end
+
+  pal(red, red)
+end
+
+return draw_face
 end
 
 ---file:
@@ -203,13 +296,6 @@ return starmap
 end
 
 ---file:
-__package_preload['choose'] = function (...)
-return function(arr)
-  return arr[1+flr(rnd(#arr))]
-end
-end
-
----file:
 __package_preload['colors'] = function (...)
 black = 0
 dark_blue = 1
@@ -230,53 +316,26 @@ peach = 15
 end
 
 ---file:
-__package_preload['sprites'] = function (...)
-sprites = {
-  current_indicator=16,
-  destination_indicator=18,
-  crosshair=19,
-}
-end
+__package_preload['make_tweener'] = function (...)
+return function(amts, props)
+  local tweener = {}
+  tweener.vals = {}
 
----file:
-__package_preload['buttons'] = function (...)
-btn_left = 0
-btn_right = 1
-btn_up = 2
-btn_down = 3
-btn_a = 4
-btn_b = 5
-end
-
----file:
-__package_preload['vec'] = function (...)
-local dist = require('dist')
-
-local vec = {}
-
-local z = {x=0,y=0}
-
-function vec.norm(v)
-  local len = dist(z, v)
-  if len <= 0 then
-    return {x=0,y=0}
+  -- initialize default vals
+  for p,amt in pairs(amts) do
+    tweener.vals[p] = props[p]
   end
-  return {x=v.x/len,y=v.y/len}
+
+  function tweener.tween(props)
+    for p,amt in pairs(amts) do
+      local v = tweener.vals[p]
+      tweener.vals[p] += (props[p] - v) * amt
+    end
+  end
+
+  return tweener
 end
 
-function vec.mul(v, s)
-  return {x=v.x*s,y=v.y*s}
-end
-
-function vec.add(a, b)
-  return {x=a.x+b.x,y=a.y+b.y}
-end
-
-function vec.sub(a, b)
-  return {x=a.x-b.x,y=a.y-b.y}
-end
-
-return vec
 end
 
 ---file:
@@ -327,25 +386,6 @@ end
 end
 
 ---file:
-__package_preload['times'] = function (...)
-return function(n, func)
-  local ret = {}
-  for i=0,n do
-    add(ret, func())
-  end
-  return ret
-end
-
-end
-
----file:
-__package_preload['clamp'] = function (...)
-return function(x,mn,mx)
-  return min(mx,max(x,mn))
-end
-end
-
----file:
 __package_preload['planetmap'] = function (...)
 local dist = require('dist')
 local vec = require('vec')
@@ -366,25 +406,27 @@ local planet_count_probs = {
 }
 
 local planet_color_probs = {
-  light_gray,
-  light_gray,
-  light_gray,
+  -- light_gray,
+  -- light_gray,
+  -- light_gray,
   light_gray,
 
-  brown,
-  brown,
+  -- brown,
+  -- brown,
 
-  dark_gray,
-  dark_gray,
-  dark_gray,
+  -- dark_gray,
+  -- dark_gray,
+  -- dark_gray,
 
-  dark_green,
-  dark_green,
+  -- dark_green,
+  -- dark_green,
 
-  dark_purple,
+  -- dark_purple,
   pink,  
   green,
   orange,
+  blue,
+  -- dark_blue,
 }
 
 local planet_size_probs = {
@@ -398,24 +440,22 @@ local planet_size_probs = {
 local moon_count_probs = {
   0,0,0,0,
   1,1,1,1,1,
-  2,2,2,
-  3,3,
+  2,2,2,2,2,2,
+  3,3,3,3,
+  4,4,
 }
 
 local moon_color_probs = {
   light_gray,
   light_gray,
-  light_gray,
-  light_gray,
-  light_gray,
-  light_gray,
-  light_gray,
 
   brown,
   brown,
   brown,
   brown,
 
+  dark_gray,
+  dark_gray,
   dark_gray,
   dark_gray,
   dark_gray,
@@ -423,18 +463,14 @@ local moon_color_probs = {
 
   dark_green,
   dark_green,
+  dark_green,
 
-  green,
-  green,
-  green,
-  green,
-  green,
-  blue,
-  blue,
-  blue,
-  blue,
-  blue,
-  blue,
+  dark_blue,
+  dark_blue,
+  dark_blue,
+  dark_blue,
+  dark_blue,
+  dark_blue,
 }
 
 local moon_size_probs = {
@@ -464,37 +500,153 @@ function random_planetmap_props()
   }
 end
 
+function compute_drawables(props)
+  drawables = {}
+  local pad = 3
+  local top = 1
+
+  for np,planet in pairs(props.planets) do
+    top += planet.size
+    local left = 7
+    local selected
+
+    if props.selected.planet == np then
+      selected = true
+      if props.selected.moon == 0 then
+        left += pad*2
+      end
+      top += pad*2
+    end
+
+    drawable_planet = {
+      planet=planet,
+      moons={},
+      x=left,
+      y=top,
+    }
+    add(drawables, drawable_planet)
+
+    left += planet.size + pad
+
+    if selected and props.selected.moon == 0 then
+      left += pad*2
+    end
+
+    for mp,moon in pairs(planet.moons) do
+      left += moon.size
+   
+      if selected and props.selected.moon == mp then
+        left += pad*2
+        top += pad
+      end
+   
+      drawable_moon = {
+        planet=moon,
+        x=left,
+        y=top,
+      }
+      add(drawable_planet.moons, drawable_moon)
+      left += moon.size + pad
+
+      if selected and props.selected.moon == mp then
+        left += pad*2
+        top -= pad
+      end
+    end
+
+    top += planet.size + pad
+
+    if selected then
+      top += pad*2
+    end
+  end
+
+  return drawables
+end
+
 function planetmap.init(props)
   props = props or random_planetmap_props()
+  local planet = choose(props.planets)
+  props.selected = {
+    planet=1+flr(rnd(#props.planets)),
+    moon=flr(rnd(#planet.moons + 1)),
+  }
+  props.drawables = compute_drawables(props)
+  props.tweens = {}
+  for n,dp in pairs(props.drawables) do
+    local dptw = {
+      tw=make_tweener({x=0.4,y=0.4}, dp),
+      moons={},
+    }
+    add(props.tweens, dptw)
+    
+    for n,dm in pairs(dp.moons) do
+      local dmtw = {
+        tw=make_tweener({x=0.4-0.06*n,y=0.4-0.06*n}, dm),
+      }
+      add(dptw.moons, dmtw)
+    end
+  end
   return props
 end
 
 function planetmap.update(props)
+  if btnp(btn_a) then
+    return planetmap.init()
+  end
+
+  local dirty = false
+  if btnp(btn_down) then
+    props.selected.planet = 1 + (props.selected.planet % #props.planets)
+    props.selected.moon = 0
+    dirty = true
+  elseif btnp(btn_up) then
+    props.selected.planet = 1 + ((props.selected.planet-2) % #props.planets)
+    props.selected.moon = 0
+    dirty = true
+  end
+  local selected_planet = props.planets[props.selected.planet]
+  if btnp(btn_right) then
+    props.selected.moon = (props.selected.moon+1) % (#selected_planet.moons + 1)
+    dirty = true
+  elseif btnp(btn_left) then
+    props.selected.moon = (props.selected.moon-1) % (#selected_planet.moons + 1)
+    dirty = true
+  end
+
+  if dirty then
+    props.drawables = compute_drawables(props)
+  end
+
+  for np,dptw in pairs(props.tweens) do
+    local dp = props.drawables[np]
+    dptw.tw.tween(dp)
+    for nm,dmtw in pairs(dptw.moons) do
+      local dm = dp.moons[nm]
+      dmtw.tw.tween(dm)
+    end
+  end
+
   return props
 end
 
-function draw_planet(props,x,y)
-  -- printh(x)
-  -- printh(y)
-  -- printh(props.size)
-  -- printh(props.color)
+function draw_planet(props,x,y,selected)
+  if selected then
+    circ(x, y, props.size+2, red)
+    rectfill(x-props.size-2,y-props.size-2,x+props.size+2, y+flr(props.size/2), black)
+  end
   circfill(x, y, props.size, props.color)
-  -- circfill(x, y, 4, pink)
 end
 
 function planetmap.draw(props)
   cls()
-  local top = 1
-  for n,planet in pairs(props.planets) do
-    top += planet.size
-    draw_planet(planet, 7, top)
-    local left = 3 + planet.size
-    for m,moon in pairs(planet.moons) do
-      left += moon.size
-      draw_planet(moon, 7 + left, top)
-      left += moon.size + 3
+  for np,dp in pairs(props.drawables) do
+    local dptw = props.tweens[np]
+    draw_planet(dp.planet, dptw.tw.vals.x, dptw.tw.vals.y, props.selected.planet == np and props.selected.moon == 0)
+    for nm,dm in pairs(dp.moons) do
+      local dmtw = dptw.moons[nm]
+      draw_planet(dm.planet, dmtw.tw.vals.x, dmtw.tw.vals.y, props.selected.planet == np and props.selected.moon == nm)
     end
-    top += planet.size + 3
   end
 end
 
@@ -502,123 +654,83 @@ return planetmap
 end
 
 ---file:
-__package_preload['draw_face'] = function (...)
-local choose = require('choose')
-
-local face_probs = {
-  80
-}
-
-local hair_probs = {
-  0,
-  81,
-  81,
-  81,
-  82,
-  82,
-  82,
-  83,
-  83,
-  83,
-  84,
-  84,
-  84,
-}
-
-local facial_hair_probs = {
-  0,
-  0,
-  0,
-  0,
-  0,
-  0,
-  0,
-  0,
-  85,
-  86,
-  87,
-  88,
-}
-
-local skintone_probs = {
-  -- hooman colors:
-  brown,
-  brown,
-  brown,
-  peach,
-  peach,
-  peach,
-  white,
-  white,
-
-  -- alium colors:
-  indigo,
-  blue,
-  green,
-  red,
-}
-
-local hairtone_probs = {
-  -- orange,
-  orange,
-  -- yellow,
-  yellow,
-  -- white,
-  white,
-  -- brown,
-  brown,
-  -- light_gray,
-  light_gray,
-  -- dark_gray,
-  dark_gray,
-
-  dark_purple,
-  dark_blue,
-  blue,
-  -- green,
-  dark_green,
-  -- red,
-}
-
-function random_face_props()
-  local skintone = choose(skintone_probs)
-
-  local hairtone = skintone
-  while hairtone == skintone do
-    hairtone = choose(hairtone_probs)
-  end
-
-  return {
-    skintone=skintone,
-    hairtone=hairtone,
-    hair=choose(hair_probs),
-    facial_hair=choose(facial_hair_probs),
-    face=choose(face_probs)
-  }
+__package_preload['dist'] = function (...)
+function dist(a,b)
+  local dx = b.x-a.x
+  local dy = b.y-a.y
+  return sqrt(dx*dx + dy*dy)
 end
 
-function draw_face(props,x,y)
-  if not props then
-    props = random_face_props()
-  end
-
-  pal(red, props.skintone)
-  spr(props.face, x, y)
-
-  if props.hair then
-    pal(red, props.hairtone)
-    spr(props.hair, x, y)
-  end
-
-  if props.facial_hair then
-    pal(red, props.hairtone)
-    spr(props.facial_hair, x, y)
-  end
-
-  pal(red, red)
+return dist
 end
 
-return draw_face
+---file:
+__package_preload['choose'] = function (...)
+return function(arr)
+  return arr[1+flr(rnd(#arr))]
+end
+end
+
+---file:
+__package_preload['sprites'] = function (...)
+sprites = {
+  current_indicator=16,
+  destination_indicator=18,
+  crosshair=19,
+}
+end
+
+---file:
+__package_preload['vec'] = function (...)
+local dist = require('dist')
+
+local vec = {}
+
+local z = {x=0,y=0}
+
+function vec.norm(v)
+  local len = dist(z, v)
+  if len <= 0 then
+    return {x=0,y=0}
+  end
+  return {x=v.x/len,y=v.y/len}
+end
+
+function vec.mul(v, s)
+  return {x=v.x*s,y=v.y*s}
+end
+
+function vec.add(a, b)
+  return {x=a.x+b.x,y=a.y+b.y}
+end
+
+function vec.sub(a, b)
+  return {x=a.x-b.x,y=a.y-b.y}
+end
+
+return vec
+end
+
+---file:
+__package_preload['times'] = function (...)
+return function(n, func)
+  local ret = {}
+  for i=0,n do
+    add(ret, func())
+  end
+  return ret
+end
+
+end
+
+---file:
+__package_preload['buttons'] = function (...)
+btn_left = 0
+btn_right = 1
+btn_up = 2
+btn_down = 3
+btn_a = 4
+btn_b = 5
 end
 
 ---file:
