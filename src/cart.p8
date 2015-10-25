@@ -5,10 +5,266 @@ __lua__
 __package_preload={}
 
 ---file:
+__package_preload['times'] = function (...)
+return function(n, func)
+  local ret = {}
+  for i=0,n do
+    add(ret, func())
+  end
+  return ret
+end
+
+end
+
+---file:
+__package_preload['colors'] = function (...)
+black = 0
+dark_blue = 1
+dark_purple = 2
+dark_green = 3
+brown = 4
+dark_gray = 5
+light_gray = 6
+white = 7
+red = 8
+orange = 9
+yellow = 10
+green = 11
+blue = 12
+indigo = 13
+pink = 14
+peach = 15
+end
+
+---file:
+__package_preload['starmap'] = function (...)
+local dist = require('dist')
+local vec = require('vec')
+local make_tweener = require('make_tweener')
+local clamp = require('clamp')
+local times = require('times')
+
+function draw_star(props)
+  local color
+  local pos = props.star.pos
+  if dist(pos, props.player_pos) > props.player_range then
+    color = indigo
+  else
+    color = white
+  end
+
+  if props.star.visited then
+    circ(pos.x, pos.y, 2, indigo)
+  end
+
+  if props.star.mission then
+    circ(pos.x, pos.y, 2, yellow)
+  end
+
+  pset(pos.x, pos.y, color)
+end
+
+local starmap = {}
+
+function random_star_props()
+  local new_star = {
+    pos={x=rnd(128),y=rnd(128)},
+    visited=rnd(1)<0.05,
+    mission=rnd(1)<0.01,
+  }
+
+  return new_star
+end
+
+local indicator_tweener = make_tweener({x=0.5,y=0.5})
+
+function random_starmap_props()
+  local stars = times(80, random_star_props)
+  local current_star = stars[1+flr(rnd(#stars))]
+  current_star.visited = true
+  local props = {
+    player_pos=current_star.pos,
+    player_range=20 + rnd(80),
+    stars=stars,
+    indicator_pos={x=current_star.pos.x,y=current_star.pos.y},
+    crosshair={
+      visible=true,
+      x=current_star.pos.x,
+      y=current_star.pos.y,
+    },
+    crosshair_speed=0.5,
+  }
+
+  indicator_tweener.init(props.indicator_pos)
+
+  return props
+end
+
+function starmap.init(props)
+  props = props or random_starmap_props()
+  return props
+end
+
+function get_destination_star(stars, pos)
+  local closest
+  local min_dist = 9999
+
+  for i,star in pairs(stars) do
+    local d = dist(star.pos, pos)
+    if d < min_dist then
+      closest = star
+      min_dist = d
+      closest._dist = d
+    end
+  end
+
+  return closest
+end
+
+function starmap.update(props)
+  local crosshair_moved
+  local crosshair_v = {x=0,y=0}
+
+  if btn(btn_left) then
+    crosshair_v.x = -1
+    crosshair_moved = true
+  elseif btn(btn_right) then
+    crosshair_v.x = 1
+    crosshair_moved = true
+  end
+
+  if btn(btn_up) then
+    crosshair_v.y = -1
+    crosshair_moved = true
+  elseif btn(btn_down) then
+    crosshair_v.y = 1
+    crosshair_moved = true
+  end
+
+  crosshair_v = vec.mul(vec.norm(crosshair_v), props.crosshair_speed)
+  props.crosshair.x = clamp(props.crosshair.x+crosshair_v.x, 0,127)
+  props.crosshair.y = clamp(props.crosshair.y+crosshair_v.y, 0,127)
+
+  if not crosshair_moved then
+    props.crosshair_speed = 0.5
+    props.crosshair_held_time = 0
+  else
+    props.destination_star = get_destination_star(props.stars, props.crosshair)
+    props.crosshair_held_time += 1
+    props.indicator_pos.tweens.targets.x = props.destination_star.pos.x
+    props.indicator_pos.tweens.targets.y = props.destination_star.pos.y
+
+    if props.crosshair_held_time > 10 then
+      props.crosshair_speed = 2
+    elseif props.crosshair_held_time > 5 then
+      props.crosshair_speed = 1
+    end
+  end
+
+  props.indicator_pos.tweens.tween(props.indicator_pos)
+
+  return props
+end
+
+function starmap.draw(props)
+  cls()
+  
+  circfill(props.player_pos.x, props.player_pos.y, props.player_range, dark_blue)
+
+  if props.destination_star then
+
+    if dist(props.player_pos, props.destination_star.pos) > props.player_range then   
+      line(props.player_pos.x, props.player_pos.y, props.indicator_pos.x, props.indicator_pos.y, dark_blue)
+      local pos = {x=props.indicator_pos.x,y=props.indicator_pos.y}
+      local dir = vec.norm(vec.sub(pos, props.player_pos))
+      local edge = vec.add(props.player_pos, vec.mul(dir, props.player_range))
+      line(props.player_pos.x, props.player_pos.y, edge.x, edge.y, blue)
+    else
+      line(props.player_pos.x, props.player_pos.y, props.indicator_pos.x, props.indicator_pos.y, blue)
+    end
+  end
+  
+  for n,star in pairs(props.stars) do
+    local star = props.stars[n]
+    draw_star({
+      star=star,
+      player_pos=props.player_pos,
+      player_range=props.player_range,
+    })
+  end
+
+  spr(sprites.current_indicator, props.player_pos.x-3, props.player_pos.y-9)
+
+  if props.crosshair.visible then
+    spr(sprites.crosshair, props.crosshair.x-3, props.crosshair.y-3)
+  end
+
+  if props.destination_star then
+    local ind
+    
+    if dist(props.player_pos, props.destination_star.pos) > props.player_range then
+      ind = sprites.destination_indicator
+      pal(dark_blue, black)
+      pal(black, dark_blue)
+      palt(black, true)
+      palt(dark_blue, false)
+    else
+      ind = sprites.destination_indicator
+    end
+
+    spr(ind, props.indicator_pos.x-3, props.indicator_pos.y-9)
+    pal(dark_blue, dark_blue)
+    pal(black, black)
+    palt()
+  end
+end
+
+return starmap
+end
+
+---file:
+__package_preload['make_tweener'] = function (...)
+return function(amts)
+  local tweener = {}
+
+  function tweener.init(props, factor)
+    props.tweens = {
+      tween=tweener.tween,
+      factor=factor or 1,
+      targets={},
+    }
+
+    for p,amt in pairs(amts) do
+      props.tweens.targets[p] = props[p]
+    end
+  end
+
+  function tweener.tween(props)
+    for p,amt in pairs(amts) do
+      local target = props.tweens.targets[p]
+      props[p] += (target - props[p]) * amt * props.tweens.factor
+    end
+  end
+
+  return tweener
+end
+
+end
+
+---file:
 __package_preload['clamp'] = function (...)
 return function(x,mn,mx)
   return min(mx,max(x,mn))
 end
+end
+
+---file:
+__package_preload['sprites'] = function (...)
+sprites = {
+  current_indicator=16,
+  destination_indicator=17,
+  crosshair=19,
+}
 end
 
 ---file:
@@ -132,219 +388,15 @@ return draw_face
 end
 
 ---file:
-__package_preload['starmap'] = function (...)
-local dist = require('dist')
-local vec = require('vec')
-local make_tweener = require('make_tweener')
-local clamp = require('clamp')
-local times = require('times')
-
-function draw_star(props)
-  local color
-  local pos = props.star.pos
-  if dist(pos, props.player_pos) > props.player_range then
-    color = indigo
-  else
-    color = white
-  end
-
-  if props.star.visited then
-    circ(pos.x, pos.y, 2, indigo)
-  end
-
-  if props.star.mission then
-    circ(pos.x, pos.y, 2, yellow)
-  end
-
-  pset(pos.x, pos.y, color)
-end
-
-local starmap = {}
-
-function random_starmap_props()
-  local stars = times(80, random_star)
-  local current_star = stars[1+flr(rnd(#stars))]
-  current_star.visited = true
-  return {
-    player_pos=current_star.pos,
-    player_range=20 + rnd(80),
-    stars=stars,
-    dest_indicator_pos={x=current_star.pos.x,y=current_star.pos.y},
-    crosshair={
-      visible=true,
-      x=current_star.pos.x,
-      y=current_star.pos.y,
-    },
-    crosshair_speed=0.5,
-  }
-end
-
-
-function starmap.init(props)
-  props = props or random_starmap_props()
-
-  props.dest_indicator_pos_tween = make_tweener({x=0.4,y=0.4}, props.dest_indicator_pos)
-  return props
-end
-
-function get_destination_star(stars, pos)
-  local closest
-  local min_dist = 9999
-
-  for i,star in pairs(stars) do
-    local d = dist(star.pos, pos)
-    if d < min_dist then
-      closest = star
-      min_dist = d
-      closest._dist = d
-    end
-  end
-
-  return closest
-end
-
-function starmap.update(props)
-  local crosshair_moved
-  local crosshair_v = {x=0,y=0}
-
-  if btn(btn_left) then
-    crosshair_v.x = -1
-    crosshair_moved = true
-  elseif btn(btn_right) then
-    crosshair_v.x = 1
-    crosshair_moved = true
-  end
-
-  if btn(btn_up) then
-    crosshair_v.y = -1
-    crosshair_moved = true
-  elseif btn(btn_down) then
-    crosshair_v.y = 1
-    crosshair_moved = true
-  end
-
-  crosshair_v = vec.mul(vec.norm(crosshair_v), props.crosshair_speed)
-  props.crosshair.x = clamp(props.crosshair.x+crosshair_v.x, 0,127)
-  props.crosshair.y = clamp(props.crosshair.y+crosshair_v.y, 0,127)
-
-  if not crosshair_moved then
-    props.crosshair_speed = 0.5
-    props.crosshair_held_time = 0
-  else
-    props.destination_star = get_destination_star(props.stars, props.crosshair)
-    props.crosshair_held_time += 1
-    props.dest_indicator_pos = props.destination_star.pos
-
-    if props.crosshair_held_time > 10 then
-      props.crosshair_speed = 2
-    elseif props.crosshair_held_time > 5 then
-      props.crosshair_speed = 1
-    end
-  end
-
-  props.dest_indicator_pos_tween.tween(props.dest_indicator_pos)
-  return props
-end
-
-function starmap.draw(props)
-  cls()
-  
-  circfill(props.player_pos.x, props.player_pos.y, props.player_range, dark_blue)
-
-  if props.destination_star then
-
-    if dist(props.player_pos, props.destination_star.pos) > props.player_range then   
-      line(props.player_pos.x, props.player_pos.y, props.dest_indicator_pos_tween.vals.x, props.dest_indicator_pos_tween.vals.y, dark_blue)
-      local pos = {x=props.dest_indicator_pos_tween.vals.x,y=props.dest_indicator_pos_tween.vals.y}
-      local dir = vec.norm(vec.sub(pos, props.player_pos))
-      local edge = vec.add(props.player_pos, vec.mul(dir, props.player_range))
-      line(props.player_pos.x, props.player_pos.y, edge.x, edge.y, blue)
-    else
-      line(props.player_pos.x, props.player_pos.y, props.dest_indicator_pos_tween.vals.x, props.dest_indicator_pos_tween.vals.y, blue)
-    end
-  end
-  
-  for n,star in pairs(props.stars) do
-    local star = props.stars[n]
-    draw_star({
-      star=star,
-      player_pos=props.player_pos,
-      player_range=props.player_range,
-    })
-  end
-
-  spr(sprites.current_indicator, props.player_pos.x-3, props.player_pos.y-9)
-
-  if props.crosshair.visible then
-    spr(sprites.crosshair, props.crosshair.x-3, props.crosshair.y-3)
-  end
-
-  if props.destination_star then
-    local ind
-    
-    if dist(props.player_pos, props.destination_star.pos) > props.player_range then
-      ind = sprites.destination_indicator
-    else
-      ind = sprites.destination_indicator-1
-    end
-
-    spr(ind, props.dest_indicator_pos_tween.vals.x-3, props.dest_indicator_pos_tween.vals.y-9)
-  end
-end
-
-return starmap
-end
-
----file:
-__package_preload['colors'] = function (...)
-black = 0
-dark_blue = 1
-dark_purple = 2
-dark_green = 3
-brown = 4
-dark_gray = 5
-light_gray = 6
-white = 7
-red = 8
-orange = 9
-yellow = 10
-green = 11
-blue = 12
-indigo = 13
-pink = 14
-peach = 15
-end
-
----file:
-__package_preload['make_tweener'] = function (...)
-return function(amts, props)
-  local tweener = {}
-  tweener.vals = {}
-
-  -- initialize default vals
-  for p,amt in pairs(amts) do
-    tweener.vals[p] = props[p]
-  end
-
-  function tweener.tween(props)
-    for p,amt in pairs(amts) do
-      local v = tweener.vals[p]
-      tweener.vals[p] += (props[p] - v) * amt
-    end
-  end
-
-  return tweener
-end
-
-end
-
----file:
 __package_preload['main'] = function (...)
+printh('------------------------------------------------------')
+printh(' picoverse by @lourobros')
+printh(' source code available at github.com/namuol/picoverse')
+printh('------------------------------------------------------')
+
 require('colors')
 require('sprites')
 require('buttons')
-
--- boilerplate
 
 __current_mode__ = nil
 __current_props__ = nil
@@ -356,6 +408,9 @@ end
 
 function _update()
   __current_props__ = __current_mode__.update(__current_props__)
+  if btnp(btn_a,1) then
+    printh(stat(0))
+  end
 end
 
 function _draw()
@@ -366,23 +421,202 @@ starmap = require('starmap')
 faces = require('faces_test')
 planetmap = require('planetmap')
 
--- end game mode
+function _init()
+  set_mode(planetmap)
+end
 
-function random_star()
-  local new_star = {
+end
+
+---file:
+__package_preload['vec'] = function (...)
+local dist = require('dist')
+
+local vec = {}
+
+local z = {x=0,y=0}
+
+function vec.norm(v)
+  local len = dist(z, v)
+  if len <= 0 then
+    return {x=0,y=0}
+  end
+  return {x=v.x/len,y=v.y/len}
+end
+
+function vec.mul(v, s)
+  return {x=v.x*s,y=v.y*s}
+end
+
+function vec.add(a, b)
+  return {x=a.x+b.x,y=a.y+b.y}
+end
+
+function vec.sub(a, b)
+  return {x=a.x-b.x,y=a.y-b.y}
+end
+
+return vec
+end
+
+---file:
+__package_preload['dist'] = function (...)
+function dist(a,b)
+  local dx = b.x-a.x
+  local dy = b.y-a.y
+  return sqrt(dx*dx + dy*dy)
+end
+
+return dist
+end
+
+---file:
+__package_preload['ecs.testcart.src.main'] = function (...)
+local ecs = require('ecs')
+world = nil
+
+function applyVelocity(entities)
+  for n,entity in pairs(ecs.entitiesWith(entities, {"vel", "pos"})) do
+    entity.pos.x += entity.vel.x
+    entity.pos.y += entity.vel.y
+  end
+
+  return entities
+end
+
+local gravity = 0.2
+function applyGravity(entities)
+  for n,entity in pairs(ecs.entitiesWith(entities, {"vel"})) do
+    entity.vel.y += gravity
+  end
+
+  return entities
+end
+
+local floor = 127
+local left_wall = 0
+local right_wall = 127
+function bounce(entities)
+  for n,entity in pairs(ecs.entitiesWith(entities, {"vel", "pos", "radius"})) do
+    local bottom = entity.pos.y + entity.radius
+    if bottom > floor then
+      entity.pos.y = floor - entity.radius
+      entity.vel.y *= -1
+    end
+
+    local left = entity.pos.x - entity.radius
+    if left < left_wall then
+      entity.pos.x = left_wall + entity.radius
+      entity.vel.x *= -1
+    end
+
+    local right = entity.pos.x + entity.radius
+    if right > right_wall then
+      entity.pos.x = right_wall - entity.radius
+      entity.vel.x *= -1
+    end
+  end
+
+  return entities
+end
+
+function draw(entities)
+  for n,entity in pairs(ecs.entitiesWith(entities, {"draw"})) do
+    entity.draw(entity)
+  end
+
+  return entities
+end
+
+function drawCircle(e)
+  circfill(e.pos.x,e.pos.y, e.radius, e.color)
+end
+
+function drawSquare(e)
+  rectfill(e.pos.x,e.pos.y, e.pos.x+e.size,e.pos.y+e.size, e.color)
+end
+
+function norm()
+  return rnd(2) - 1
+end
+
+function random_ball()
+  return {
+    draw=drawCircle,
+    vel={x=norm()*3,y=norm()*3},
     pos={x=rnd(128),y=rnd(128)},
-    visited=rnd(1)<0.05,
-    mission=rnd(1)<0.01,
+    radius=2+rnd(4),
+    color=1+flr(rnd(15))
   }
+end
 
-  return new_star
+function tween(entities)
+  for n,entity in pairs(ecs.entitiesWith(entities, {"target_pos", "pos"})) do
+    entity.pos.x += (entity.target_pos.x - entity.pos.x) * 0.1
+    entity.pos.y += (entity.target_pos.y - entity.pos.y) * 0.1
+  end
+
+  return entities
+end
+
+function randomize_positions(entities)
+  if rnd(1) < 0.01 then
+    for n,entity in pairs(ecs.entitiesWith(entities, {"target_pos"})) do
+      entity.target_pos.x = rnd(128)
+      entity.target_pos.y = rnd(128)
+    end
+  end
+  return entities
+end
+
+function random_square()
+  return {
+    draw=drawSquare,
+    tween=tween,
+    pos={x=rnd(128),y=rnd(128)},
+    target_pos={x=rnd(128),y=rnd(128)},
+    size=4+flr(rnd(8)),
+    color=1+flr(rnd(15))
+  }
 end
 
 function _init()
-  set_mode(planetmap)
-  -- do_random_starmap()
+  world = ecs.world()
+  for i=1,10 do
+    world.addEntity(random_ball())
+  end
+
+  for i=1,10 do
+    world.addEntity(random_square())
+  end
 end
 
+function _update()
+  world.invoke({
+    applyGravity,
+    applyVelocity,
+    bounce,
+    randomize_positions,
+    tween,
+  })
+end
+
+function _draw()
+  cls()
+
+  world.invoke({
+    draw,
+  })
+end
+end
+
+---file:
+__package_preload['buttons'] = function (...)
+btn_left = 0
+btn_right = 1
+btn_up = 2
+btn_down = 3
+btn_a = 4
+btn_b = 5
 end
 
 ---file:
@@ -393,6 +627,9 @@ local make_tweener = require('make_tweener')
 local clamp = require('clamp')
 local times = require('times')
 local choose = require('choose')
+local ecs = require('ecs.ecs')
+
+local world = nil
 
 local planetmap = {}
 
@@ -479,19 +716,33 @@ local moon_size_probs = {
   -- 3,3,3,
 }
 
+local tweener = make_tweener({x=0.4,y=0.4})
+
 function random_moon_props()
-  return {
+  local props = {
     size=choose(moon_size_probs),
     color=choose(moon_color_probs),
+    draw=draw_planet,
+    x=0,y=0,
   }
+
+  tweener.init(props)
+
+  return props
 end
 
 function random_planet_props()
-  return {
+  local props = {
     color=choose(planet_color_probs),
     size=choose(planet_size_probs),
     moons=times(choose(moon_count_probs), random_moon_props),
+    draw=draw_planet,
+    x=0,y=0,
   }
+
+  tweener.init(props)
+
+  return props
 end
 
 function random_planetmap_props()
@@ -500,8 +751,7 @@ function random_planetmap_props()
   }
 end
 
-function compute_drawables(props)
-  drawables = {}
+function update_tween_positions(props)
   local pad = 3
   local top = 1
 
@@ -514,17 +764,17 @@ function compute_drawables(props)
       selected = true
       if props.selected.moon == 0 then
         left += pad*2
+        planet.selected = true
+      else
+        planet.selected = false
       end
       top += pad*2
+    else
+      planet.selected = false
     end
-
-    drawable_planet = {
-      planet=planet,
-      moons={},
-      x=left,
-      y=top,
-    }
-    add(drawables, drawable_planet)
+    
+    planet.tweens.targets.x = left
+    planet.tweens.targets.y = top
 
     left += planet.size + pad
 
@@ -534,18 +784,19 @@ function compute_drawables(props)
 
     for mp,moon in pairs(planet.moons) do
       left += moon.size
+      moon.tweens.factor = 1/(1 + mp*0.5)
    
       if selected and props.selected.moon == mp then
         left += pad*2
         top += pad
+        moon.selected = true
+      else
+        moon.selected = false
       end
    
-      drawable_moon = {
-        planet=moon,
-        x=left,
-        y=top,
-      }
-      add(drawable_planet.moons, drawable_moon)
+      moon.tweens.targets.x = left
+      moon.tweens.targets.y = top
+
       left += moon.size + pad
 
       if selected and props.selected.moon == mp then
@@ -560,8 +811,6 @@ function compute_drawables(props)
       top += pad*2
     end
   end
-
-  return drawables
 end
 
 function planetmap.init(props)
@@ -571,23 +820,34 @@ function planetmap.init(props)
     planet=1+flr(rnd(#props.planets)),
     moon=flr(rnd(#planet.moons + 1)),
   }
-  props.drawables = compute_drawables(props)
-  props.tweens = {}
-  for n,dp in pairs(props.drawables) do
-    local dptw = {
-      tw=make_tweener({x=0.4,y=0.4}, dp),
-      moons={},
-    }
-    add(props.tweens, dptw)
-    
-    for n,dm in pairs(dp.moons) do
-      local dmtw = {
-        tw=make_tweener({x=0.4-0.06*n,y=0.4-0.06*n}, dm),
-      }
-      add(dptw.moons, dmtw)
+
+  world = ecs.world()
+
+  for np,planet in pairs(props.planets) do
+    world.addEntity(planet)
+    for nm,moon in pairs(planet.moons) do
+      world.addEntity(moon)
     end
   end
+
+  update_tween_positions(props)
   return props
+end
+
+function tween(entities)
+  for n,entity in pairs(ecs.entitiesWith(entities, {"tweens"})) do
+    entity.tweens.tween(entity)
+  end
+
+  return entities
+end
+
+function draw(entities)
+  for n,entity in pairs(ecs.entitiesWith(entities, {"draw"})) do
+    entity.draw(entity, entity.x, entity.y, entity.selected)
+  end
+
+  return entities
 end
 
 function planetmap.update(props)
@@ -615,17 +875,12 @@ function planetmap.update(props)
   end
 
   if dirty then
-    props.drawables = compute_drawables(props)
+    update_tween_positions(props)
   end
 
-  for np,dptw in pairs(props.tweens) do
-    local dp = props.drawables[np]
-    dptw.tw.tween(dp)
-    for nm,dmtw in pairs(dptw.moons) do
-      local dm = dp.moons[nm]
-      dmtw.tw.tween(dm)
-    end
-  end
+  world.invoke({
+    tween,
+  })
 
   return props
 end
@@ -640,97 +895,12 @@ end
 
 function planetmap.draw(props)
   cls()
-  for np,dp in pairs(props.drawables) do
-    local dptw = props.tweens[np]
-    draw_planet(dp.planet, dptw.tw.vals.x, dptw.tw.vals.y, props.selected.planet == np and props.selected.moon == 0)
-    for nm,dm in pairs(dp.moons) do
-      local dmtw = dptw.moons[nm]
-      draw_planet(dm.planet, dmtw.tw.vals.x, dmtw.tw.vals.y, props.selected.planet == np and props.selected.moon == nm)
-    end
-  end
+  world.invoke({
+    draw,
+  })
 end
 
 return planetmap
-end
-
----file:
-__package_preload['dist'] = function (...)
-function dist(a,b)
-  local dx = b.x-a.x
-  local dy = b.y-a.y
-  return sqrt(dx*dx + dy*dy)
-end
-
-return dist
-end
-
----file:
-__package_preload['choose'] = function (...)
-return function(arr)
-  return arr[1+flr(rnd(#arr))]
-end
-end
-
----file:
-__package_preload['sprites'] = function (...)
-sprites = {
-  current_indicator=16,
-  destination_indicator=18,
-  crosshair=19,
-}
-end
-
----file:
-__package_preload['vec'] = function (...)
-local dist = require('dist')
-
-local vec = {}
-
-local z = {x=0,y=0}
-
-function vec.norm(v)
-  local len = dist(z, v)
-  if len <= 0 then
-    return {x=0,y=0}
-  end
-  return {x=v.x/len,y=v.y/len}
-end
-
-function vec.mul(v, s)
-  return {x=v.x*s,y=v.y*s}
-end
-
-function vec.add(a, b)
-  return {x=a.x+b.x,y=a.y+b.y}
-end
-
-function vec.sub(a, b)
-  return {x=a.x-b.x,y=a.y-b.y}
-end
-
-return vec
-end
-
----file:
-__package_preload['times'] = function (...)
-return function(n, func)
-  local ret = {}
-  for i=0,n do
-    add(ret, func())
-  end
-  return ret
-end
-
-end
-
----file:
-__package_preload['buttons'] = function (...)
-btn_left = 0
-btn_right = 1
-btn_up = 2
-btn_down = 3
-btn_a = 4
-btn_b = 5
 end
 
 ---file:
@@ -769,6 +939,61 @@ function faces.draw(props)
 end
 
 return faces
+end
+
+---file:
+__package_preload['ecs.ecs'] = function (...)
+local ecs = {}
+
+function containsAll(e, keys)
+  for _,name in pairs(keys) do
+    if not e[name] then
+      return false
+    end
+  end
+  
+  return true
+end
+
+function ecs.entitiesWith(entities, componentNames)
+  local results = {}
+  for id,entity in pairs(entities) do
+    if containsAll(entity, componentNames) then
+      results[#results+1] = entity
+    end
+  end
+
+  return results
+end
+
+function ecs.world()
+  local world = {}
+
+  local entities = {}
+  function world.addEntity(components)
+    local id = #entities+1
+    entities[id] = components
+    
+    return id
+  end
+
+  function world.invoke(funcs)
+    for n,func in pairs(funcs) do
+      entities = func(entities)
+    end
+  end
+
+  return world
+end
+
+return ecs
+end
+
+---file:
+__package_preload['choose'] = function (...)
+return function(arr)
+  return arr[1+flr(rnd(#arr))]
+end
 end
 --- require/dofile replacements
 
@@ -851,22 +1076,22 @@ __gfx__
 88888880000000008000000000000000800000080088880000888800008888800000000088882222888822228888222288882222888822228888222288882222
 08888880000000008000000000000000000000000080080000800800008000800000000088882222888822228888222288882222888822228888222288882222
 00888800000000008000000000000000000000000088880000000000000080000000800088882222888822228888222288882222888822228888222288882222
-22228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888
-22228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888
-22228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888
-22228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888
-88882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222
-88882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222
-88882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222
-88882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222
-22228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888
-22228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888
-22228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888
-22228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888
-88882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222
-88882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222
-88882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222
-88882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222
+0dddddd0222288882222888822228888222288882222888822228888000011112222333322228888222288882222888822228888222288882222888822228888
+0dddddd0222288882222888822228888222288882222888822228888000011112222333322228888222288882222888822228888222288882222888822228888
+0dddddd0222288882222888822228888222288882222888822228888000011112222333322228888222288882222888822228888222288882222888822228888
+0dddddd0222288882222888822228888222288882222888822228888000011112222333322228888222288882222888822228888222288882222888822228888
+0dddddd0888822228888222288882222888822228888222288882222444455556666777788882222888822228888222288882222888822228888222288882222
+0dddddd0888822228888222288882222888822228888222288882222444455556666777788882222888822228888222288882222888822228888222288882222
+0dddddd0888822228888222288882222888822228888222288882222444455556666777788882222888822228888222288882222888822228888222288882222
+0dddddd0888822228888222288882222888822228888222288882222444455556666777788882222888822228888222288882222888822228888222288882222
+2222888822228888222288882222888822228888222288882222888888889999aaaabbbb22228888222288882222888822228888222288882222888822228888
+2222888822228888222288882222888822228888222288882222888888889999aaaabbbb22228888222288882222888822228888222288882222888822228888
+2222888822228888222288882222888822228888222288882222888888889999aaaabbbb22228888222288882222888822228888222288882222888822228888
+2222888822228888222288882222888822228888222288882222888888889999aaaabbbb22228888222288882222888822228888222288882222888822228888
+88882222888822228888222288882222888822228888222288882222ccccddddeeeeffff88882222888822228888222288882222888822228888222288882222
+88882222888822228888222288882222888822228888222288882222ccccddddeeeeffff88882222888822228888222288882222888822228888222288882222
+88882222888822228888222288882222888822228888222288882222ccccddddeeeeffff88882222888822228888222288882222888822228888222288882222
+88882222888822228888222288882222888822228888222288882222ccccddddeeeeffff88882222888822228888222288882222888822228888222288882222
 22228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888
 22228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888
 22228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888222288882222888822228888

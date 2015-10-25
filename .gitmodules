@@ -1,3 +1,6 @@
 [submodule "utils"]
 	path = utils
 	url = git@github.com:josefnpat/pico8utils.git
+[submodule "src/ecs"]
+	path = src/ecs
+	url = https://github.com/namuol/pico8-ecs.git

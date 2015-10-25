@@ -4,6 +4,9 @@ local make_tweener = require('make_tweener')
 local clamp = require('clamp')
 local times = require('times')
 local choose = require('choose')
+local ecs = require('ecs.ecs')
+
+local world = nil
 
 local planetmap = {}
 
@@ -90,19 +93,33 @@ local moon_size_probs = {
   -- 3,3,3,
 }
 
+local tweener = make_tweener({x=0.4,y=0.4})
+
 function random_moon_props()
-  return {
+  local props = {
     size=choose(moon_size_probs),
     color=choose(moon_color_probs),
+    draw=draw_planet,
+    x=0,y=0,
   }
+
+  tweener.init(props)
+
+  return props
 end
 
 function random_planet_props()
-  return {
+  local props = {
     color=choose(planet_color_probs),
     size=choose(planet_size_probs),
     moons=times(choose(moon_count_probs), random_moon_props),
+    draw=draw_planet,
+    x=0,y=0,
   }
+
+  tweener.init(props)
+
+  return props
 end
 
 function random_planetmap_props()
@@ -111,8 +128,7 @@ function random_planetmap_props()
   }
 end
 
-function compute_drawables(props)
-  drawables = {}
+function update_tween_positions(props)
   local pad = 3
   local top = 1
 
@@ -125,17 +141,17 @@ function compute_drawables(props)
       selected = true
       if props.selected.moon == 0 then
         left += pad*2
+        planet.selected = true
+      else
+        planet.selected = false
       end
       top += pad*2
+    else
+      planet.selected = false
     end
-
-    drawable_planet = {
-      planet=planet,
-      moons={},
-      x=left,
-      y=top,
-    }
-    add(drawables, drawable_planet)
+    
+    planet.tweens.targets.x = left
+    planet.tweens.targets.y = top
 
     left += planet.size + pad
 
@@ -145,18 +161,19 @@ function compute_drawables(props)
 
     for mp,moon in pairs(planet.moons) do
       left += moon.size
+      moon.tweens.factor = 1/(1 + mp*0.5)
    
       if selected and props.selected.moon == mp then
         left += pad*2
         top += pad
+        moon.selected = true
+      else
+        moon.selected = false
       end
    
-      drawable_moon = {
-        planet=moon,
-        x=left,
-        y=top,
-      }
-      add(drawable_planet.moons, drawable_moon)
+      moon.tweens.targets.x = left
+      moon.tweens.targets.y = top
+
       left += moon.size + pad
 
       if selected and props.selected.moon == mp then
@@ -171,8 +188,6 @@ function compute_drawables(props)
       top += pad*2
     end
   end
-
-  return drawables
 end
 
 function planetmap.init(props)
@@ -182,23 +197,34 @@ function planetmap.init(props)
     planet=1+flr(rnd(#props.planets)),
     moon=flr(rnd(#planet.moons + 1)),
   }
-  props.drawables = compute_drawables(props)
-  props.tweens = {}
-  for n,dp in pairs(props.drawables) do
-    local dptw = {
-      tw=make_tweener({x=0.4,y=0.4}, dp),
-      moons={},
-    }
-    add(props.tweens, dptw)
-    
-    for n,dm in pairs(dp.moons) do
-      local dmtw = {
-        tw=make_tweener({x=0.4-0.06*n,y=0.4-0.06*n}, dm),
-      }
-      add(dptw.moons, dmtw)
+
+  world = ecs.world()
+
+  for np,planet in pairs(props.planets) do
+    world.addEntity(planet)
+    for nm,moon in pairs(planet.moons) do
+      world.addEntity(moon)
     end
   end
+
+  update_tween_positions(props)
   return props
+end
+
+function tween(entities)
+  for n,entity in pairs(ecs.entitiesWith(entities, {"tweens"})) do
+    entity.tweens.tween(entity)
+  end
+
+  return entities
+end
+
+function draw(entities)
+  for n,entity in pairs(ecs.entitiesWith(entities, {"draw"})) do
+    entity.draw(entity, entity.x, entity.y, entity.selected)
+  end
+
+  return entities
 end
 
 function planetmap.update(props)
@@ -226,17 +252,12 @@ function planetmap.update(props)
   end
 
   if dirty then
-    props.drawables = compute_drawables(props)
+    update_tween_positions(props)
   end
 
-  for np,dptw in pairs(props.tweens) do
-    local dp = props.drawables[np]
-    dptw.tw.tween(dp)
-    for nm,dmtw in pairs(dptw.moons) do
-      local dm = dp.moons[nm]
-      dmtw.tw.tween(dm)
-    end
-  end
+  world.invoke({
+    tween,
+  })
 
   return props
 end
@@ -251,14 +272,9 @@ end
 
 function planetmap.draw(props)
   cls()
-  for np,dp in pairs(props.drawables) do
-    local dptw = props.tweens[np]
-    draw_planet(dp.planet, dptw.tw.vals.x, dptw.tw.vals.y, props.selected.planet == np and props.selected.moon == 0)
-    for nm,dm in pairs(dp.moons) do
-      local dmtw = dptw.moons[nm]
-      draw_planet(dm.planet, dmtw.tw.vals.x, dmtw.tw.vals.y, props.selected.planet == np and props.selected.moon == nm)
-    end
-  end
+  world.invoke({
+    draw,
+  })
 end
 
 return planetmap

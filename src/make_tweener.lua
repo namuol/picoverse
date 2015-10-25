@@ -1,16 +1,22 @@
-return function(amts, props)
+return function(amts)
   local tweener = {}
-  tweener.vals = {}
 
-  -- initialize default vals
-  for p,amt in pairs(amts) do
-    tweener.vals[p] = props[p]
+  function tweener.init(props, factor)
+    props.tweens = {
+      tween=tweener.tween,
+      factor=factor or 1,
+      targets={},
+    }
+
+    for p,amt in pairs(amts) do
+      props.tweens.targets[p] = props[p]
+    end
   end
 
   function tweener.tween(props)
     for p,amt in pairs(amts) do
-      local v = tweener.vals[p]
-      tweener.vals[p] += (props[p] - v) * amt
+      local target = props.tweens.targets[p]
+      props[p] += (target - props[p]) * amt * props.tweens.factor
     end
   end
 
