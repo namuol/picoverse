@@ -15,10 +15,24 @@ function set_mode(mode, initial_props)
   __current_props__ = mode.init(initial_props)
 end
 
+starmap = require('starmap')
+faces = require('faces_test')
+planetmap = require('planetmap')
+
+
+mode_idx = 0
+
+modes = {
+  starmap,
+  planetmap,
+  faces,  
+}
+
 function _update()
   __current_props__ = __current_mode__.update(__current_props__)
   if btnp(btn_a,1) then
-    printh(stat(0))
+    mode_idx = (mode_idx + 1) % #modes
+    set_mode(modes[1 + mode_idx])
   end
 end
 
@@ -26,10 +40,8 @@ function _draw()
   __current_mode__.draw(__current_props__)
 end
 
-starmap = require('starmap')
-faces = require('faces_test')
-planetmap = require('planetmap')
 
 function _init()
-  set_mode(planetmap)
+  mode_idx = 0
+  set_mode(modes[1 + mode_idx])
 end

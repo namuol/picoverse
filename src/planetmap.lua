@@ -161,7 +161,7 @@ function update_tween_positions(props)
 
     for mp,moon in pairs(planet.moons) do
       left += moon.size
-      moon.tweens.factor = 1/(1 + mp*0.5)
+      moon.tweens.factor = 1/(1 + mp*0.25)
    
       if selected and props.selected.moon == mp then
         left += pad*2

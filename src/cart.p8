@@ -5,18 +5,6 @@ __lua__
 __package_preload={}
 
 ---file:
-__package_preload['times'] = function (...)
-return function(n, func)
-  local ret = {}
-  for i=0,n do
-    add(ret, func())
-  end
-  return ret
-end
-
-end
-
----file:
 __package_preload['colors'] = function (...)
 black = 0
 dark_blue = 1
@@ -34,6 +22,804 @@ blue = 12
 indigo = 13
 pink = 14
 peach = 15
+end
+
+---file:
+__package_preload['sprites'] = function (...)
+sprites = {
+  current_indicator=16,
+  destination_indicator=17,
+  crosshair=19,
+}
+end
+
+---file:
+__package_preload['ecs.testcart.src.main'] = function (...)
+local ecs = require('ecs')
+world = nil
+
+function applyVelocity(entities)
+  for n,entity in pairs(ecs.entitiesWith(entities, {"vel", "pos"})) do
+    entity.pos.x += entity.vel.x
+    entity.pos.y += entity.vel.y
+  end
+
+  return entities
+end
+
+local gravity = 0.2
+function applyGravity(entities)
+  for n,entity in pairs(ecs.entitiesWith(entities, {"vel"})) do
+    entity.vel.y += gravity
+  end
+
+  return entities
+end
+
+local floor = 127
+local left_wall = 0
+local right_wall = 127
+function bounce(entities)
+  for n,entity in pairs(ecs.entitiesWith(entities, {"vel", "pos", "radius"})) do
+    local bottom = entity.pos.y + entity.radius
+    if bottom > floor then
+      entity.pos.y = floor - entity.radius
+      entity.vel.y *= -1
+    end
+
+    local left = entity.pos.x - entity.radius
+    if left < left_wall then
+      entity.pos.x = left_wall + entity.radius
+      entity.vel.x *= -1
+    end
+
+    local right = entity.pos.x + entity.radius
+    if right > right_wall then
+      entity.pos.x = right_wall - entity.radius
+      entity.vel.x *= -1
+    end
+  end
+
+  return entities
+end
+
+function draw(entities)
+  for n,entity in pairs(ecs.entitiesWith(entities, {"draw"})) do
+    entity.draw(entity)
+  end
+
+  return entities
+end
+
+function drawCircle(e)
+  circfill(e.pos.x,e.pos.y, e.radius, e.color)
+end
+
+function drawSquare(e)
+  rectfill(e.pos.x,e.pos.y, e.pos.x+e.size,e.pos.y+e.size, e.color)
+end
+
+function norm()
+  return rnd(2) - 1
+end
+
+function random_ball()
+  return {
+    draw=drawCircle,
+    vel={x=norm()*3,y=norm()*3},
+    pos={x=rnd(128),y=rnd(128)},
+    radius=2+rnd(4),
+    color=1+flr(rnd(15))
+  }
+end
+
+function tween(entities)
+  for n,entity in pairs(ecs.entitiesWith(entities, {"target_pos", "pos"})) do
+    entity.pos.x += (entity.target_pos.x - entity.pos.x) * 0.1
+    entity.pos.y += (entity.target_pos.y - entity.pos.y) * 0.1
+  end
+
+  return entities
+end
+
+function randomize_positions(entities)
+  if rnd(1) < 0.01 then
+    for n,entity in pairs(ecs.entitiesWith(entities, {"target_pos"})) do
+      entity.target_pos.x = rnd(128)
+      entity.target_pos.y = rnd(128)
+    end
+  end
+  return entities
+end
+
+function random_square()
+  return {
+    draw=drawSquare,
+    tween=tween,
+    pos={x=rnd(128),y=rnd(128)},
+    target_pos={x=rnd(128),y=rnd(128)},
+    size=4+flr(rnd(8)),
+    color=1+flr(rnd(15))
+  }
+end
+
+function _init()
+  world = ecs.world()
+  for i=1,10 do
+    world.addEntity(random_ball())
+  end
+
+  for i=1,10 do
+    world.addEntity(random_square())
+  end
+end
+
+function _update()
+  world.invoke({
+    applyGravity,
+    applyVelocity,
+    bounce,
+    randomize_positions,
+    tween,
+  })
+end
+
+function _draw()
+  cls()
+
+  world.invoke({
+    draw,
+  })
+end
+end
+
+---file:
+__package_preload['buttons'] = function (...)
+btn_left = 0
+btn_right = 1
+btn_up = 2
+btn_down = 3
+btn_a = 4
+btn_b = 5
+end
+
+---file:
+__package_preload['ecs.ecs'] = function (...)
+local ecs = {}
+
+function containsAll(e, keys)
+  for _,name in pairs(keys) do
+    if not e[name] then
+      return false
+    end
+  end
+  
+  return true
+end
+
+function ecs.entitiesWith(entities, componentNames)
+  local results = {}
+  for id,entity in pairs(entities) do
+    if containsAll(entity, componentNames) then
+      results[#results+1] = entity
+    end
+  end
+
+  return results
+end
+
+function ecs.world()
+  local world = {}
+
+  local entities = {}
+  function world.addEntity(components)
+    local id = #entities+1
+    entities[id] = components
+    
+    return id
+  end
+
+  function world.invoke(funcs)
+    for n,func in pairs(funcs) do
+      entities = func(entities)
+    end
+  end
+
+  return world
+end
+
+return ecs
+end
+
+---file:
+__package_preload['planetmap'] = function (...)
+local dist = require('dist')
+local vec = require('vec')
+local make_tweener = require('make_tweener')
+local clamp = require('clamp')
+local times = require('times')
+local choose = require('choose')
+local ecs = require('ecs.ecs')
+
+local world = nil
+
+local planetmap = {}
+
+local planet_count_probs = {
+  1,1,
+  2,2,2,
+  3,3,3,3,
+  4,4,4,
+  5,5,
+  6,6
+}
+
+local planet_color_probs = {
+  -- light_gray,
+  -- light_gray,
+  -- light_gray,
+  light_gray,
+
+  -- brown,
+  -- brown,
+
+  -- dark_gray,
+  -- dark_gray,
+  -- dark_gray,
+
+  -- dark_green,
+  -- dark_green,
+
+  -- dark_purple,
+  pink,  
+  green,
+  orange,
+  blue,
+  -- dark_blue,
+}
+
+local planet_size_probs = {
+  3,3,3,
+  5,5,5,5,5,5,
+
+  -- 6,6,6,6,6,6,
+  7,7,7
+}
+
+local moon_count_probs = {
+  0,0,0,0,
+  1,1,1,1,1,
+  2,2,2,2,2,2,
+  3,3,3,3,
+  4,4,
+}
+
+local moon_color_probs = {
+  light_gray,
+  light_gray,
+
+  brown,
+  brown,
+  brown,
+  brown,
+
+  dark_gray,
+  dark_gray,
+  dark_gray,
+  dark_gray,
+  dark_gray,
+  dark_gray,
+
+  dark_green,
+  dark_green,
+  dark_green,
+
+  dark_blue,
+  dark_blue,
+  dark_blue,
+  dark_blue,
+  dark_blue,
+  dark_blue,
+}
+
+local moon_size_probs = {
+  1,1,1,1,1,1,1,1,
+  2,2,2,2,2,2,2,2,2,2,
+  -- 3,3,3,
+}
+
+local tweener = make_tweener({x=0.4,y=0.4})
+
+function random_moon_props()
+  local props = {
+    size=choose(moon_size_probs),
+    color=choose(moon_color_probs),
+    draw=draw_planet,
+    x=0,y=0,
+  }
+
+  tweener.init(props)
+
+  return props
+end
+
+function random_planet_props()
+  local props = {
+    color=choose(planet_color_probs),
+    size=choose(planet_size_probs),
+    moons=times(choose(moon_count_probs), random_moon_props),
+    draw=draw_planet,
+    x=0,y=0,
+  }
+
+  tweener.init(props)
+
+  return props
+end
+
+function random_planetmap_props()
+  return {
+    planets=times(choose(planet_count_probs), random_planet_props)
+  }
+end
+
+function update_tween_positions(props)
+  local pad = 3
+  local top = 1
+
+  for np,planet in pairs(props.planets) do
+    top += planet.size
+    local left = 7
+    local selected
+
+    if props.selected.planet == np then
+      selected = true
+      if props.selected.moon == 0 then
+        left += pad*2
+        planet.selected = true
+      else
+        planet.selected = false
+      end
+      top += pad*2
+    else
+      planet.selected = false
+    end
+    
+    planet.tweens.targets.x = left
+    planet.tweens.targets.y = top
+
+    left += planet.size + pad
+
+    if selected and props.selected.moon == 0 then
+      left += pad*2
+    end
+
+    for mp,moon in pairs(planet.moons) do
+      left += moon.size
+      moon.tweens.factor = 1/(1 + mp*0.25)
+   
+      if selected and props.selected.moon == mp then
+        left += pad*2
+        top += pad
+        moon.selected = true
+      else
+        moon.selected = false
+      end
+   
+      moon.tweens.targets.x = left
+      moon.tweens.targets.y = top
+
+      left += moon.size + pad
+
+      if selected and props.selected.moon == mp then
+        left += pad*2
+        top -= pad
+      end
+    end
+
+    top += planet.size + pad
+
+    if selected then
+      top += pad*2
+    end
+  end
+end
+
+function planetmap.init(props)
+  props = props or random_planetmap_props()
+  local planet = choose(props.planets)
+  props.selected = {
+    planet=1+flr(rnd(#props.planets)),
+    moon=flr(rnd(#planet.moons + 1)),
+  }
+
+  world = ecs.world()
+
+  for np,planet in pairs(props.planets) do
+    world.addEntity(planet)
+    for nm,moon in pairs(planet.moons) do
+      world.addEntity(moon)
+    end
+  end
+
+  update_tween_positions(props)
+  return props
+end
+
+function tween(entities)
+  for n,entity in pairs(ecs.entitiesWith(entities, {"tweens"})) do
+    entity.tweens.tween(entity)
+  end
+
+  return entities
+end
+
+function draw(entities)
+  for n,entity in pairs(ecs.entitiesWith(entities, {"draw"})) do
+    entity.draw(entity, entity.x, entity.y, entity.selected)
+  end
+
+  return entities
+end
+
+function planetmap.update(props)
+  if btnp(btn_a) then
+    return planetmap.init()
+  end
+
+  local dirty = false
+  if btnp(btn_down) then
+    props.selected.planet = 1 + (props.selected.planet % #props.planets)
+    props.selected.moon = 0
+    dirty = true
+  elseif btnp(btn_up) then
+    props.selected.planet = 1 + ((props.selected.planet-2) % #props.planets)
+    props.selected.moon = 0
+    dirty = true
+  end
+  local selected_planet = props.planets[props.selected.planet]
+  if btnp(btn_right) then
+    props.selected.moon = (props.selected.moon+1) % (#selected_planet.moons + 1)
+    dirty = true
+  elseif btnp(btn_left) then
+    props.selected.moon = (props.selected.moon-1) % (#selected_planet.moons + 1)
+    dirty = true
+  end
+
+  if dirty then
+    update_tween_positions(props)
+  end
+
+  world.invoke({
+    tween,
+  })
+
+  return props
+end
+
+function draw_planet(props,x,y,selected)
+  if selected then
+    circ(x, y, props.size+2, red)
+    rectfill(x-props.size-2,y-props.size-2,x+props.size+2, y+flr(props.size/2), black)
+  end
+  circfill(x, y, props.size, props.color)
+end
+
+function planetmap.draw(props)
+  cls()
+  world.invoke({
+    draw,
+  })
+end
+
+return planetmap
+end
+
+---file:
+__package_preload['times'] = function (...)
+return function(n, func)
+  local ret = {}
+  for i=0,n do
+    add(ret, func())
+  end
+  return ret
+end
+
+end
+
+---file:
+__package_preload['clamp'] = function (...)
+return function(x,mn,mx)
+  return min(mx,max(x,mn))
+end
+end
+
+---file:
+__package_preload['vec'] = function (...)
+local dist = require('dist')
+
+local vec = {}
+
+local z = {x=0,y=0}
+
+function vec.norm(v)
+  local len = dist(z, v)
+  if len <= 0 then
+    return {x=0,y=0}
+  end
+  return {x=v.x/len,y=v.y/len}
+end
+
+function vec.mul(v, s)
+  return {x=v.x*s,y=v.y*s}
+end
+
+function vec.add(a, b)
+  return {x=a.x+b.x,y=a.y+b.y}
+end
+
+function vec.sub(a, b)
+  return {x=a.x-b.x,y=a.y-b.y}
+end
+
+return vec
+end
+
+---file:
+__package_preload['choose'] = function (...)
+return function(arr)
+  return arr[1+flr(rnd(#arr))]
+end
+end
+
+---file:
+__package_preload['main'] = function (...)
+printh('------------------------------------------------------')
+printh(' picoverse by @lourobros')
+printh(' source code available at github.com/namuol/picoverse')
+printh('------------------------------------------------------')
+
+require('colors')
+require('sprites')
+require('buttons')
+
+__current_mode__ = nil
+__current_props__ = nil
+
+function set_mode(mode, initial_props)
+  __current_mode__ = mode
+  __current_props__ = mode.init(initial_props)
+end
+
+starmap = require('starmap')
+faces = require('faces_test')
+planetmap = require('planetmap')
+
+
+mode_idx = 0
+
+modes = {
+  starmap,
+  planetmap,
+  faces,  
+}
+
+function _update()
+  __current_props__ = __current_mode__.update(__current_props__)
+  if btnp(btn_a,1) then
+    mode_idx = (mode_idx + 1) % #modes
+    set_mode(modes[1 + mode_idx])
+  end
+end
+
+function _draw()
+  __current_mode__.draw(__current_props__)
+end
+
+
+function _init()
+  mode_idx = 0
+  set_mode(modes[1 + mode_idx])
+end
+
+end
+
+---file:
+__package_preload['draw_face'] = function (...)
+local choose = require('choose')
+
+local face_probs = {
+  80
+}
+
+local hair_probs = {
+  0,
+  81,
+  81,
+  81,
+  82,
+  82,
+  82,
+  83,
+  83,
+  83,
+  84,
+  84,
+  84,
+}
+
+local facial_hair_probs = {
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  85,
+  86,
+  87,
+  88,
+}
+
+local skintone_probs = {
+  -- hooman colors:
+  brown,
+  brown,
+  brown,
+  peach,
+  peach,
+  peach,
+  white,
+  white,
+
+  -- alium colors:
+  indigo,
+  blue,
+  green,
+  red,
+}
+
+local hairtone_probs = {
+  -- orange,
+  orange,
+  -- yellow,
+  yellow,
+  -- white,
+  white,
+  -- brown,
+  brown,
+  -- light_gray,
+  light_gray,
+  -- dark_gray,
+  dark_gray,
+
+  dark_purple,
+  dark_blue,
+  blue,
+  -- green,
+  dark_green,
+  -- red,
+}
+
+function random_face_props()
+  local skintone = choose(skintone_probs)
+
+  local hairtone = skintone
+  while hairtone == skintone do
+    hairtone = choose(hairtone_probs)
+  end
+
+  return {
+    skintone=skintone,
+    hairtone=hairtone,
+    hair=choose(hair_probs),
+    facial_hair=choose(facial_hair_probs),
+    face=choose(face_probs)
+  }
+end
+
+function draw_face(props,x,y)
+  if not props then
+    props = random_face_props()
+  end
+
+  pal(red, props.skintone)
+  spr(props.face, x, y)
+
+  if props.hair then
+    pal(red, props.hairtone)
+    spr(props.hair, x, y)
+  end
+
+  if props.facial_hair then
+    pal(red, props.hairtone)
+    spr(props.facial_hair, x, y)
+  end
+
+  pal(red, red)
+end
+
+return draw_face
+end
+
+---file:
+__package_preload['dist'] = function (...)
+function dist(a,b)
+  local dx = b.x-a.x
+  local dy = b.y-a.y
+  return sqrt(dx*dx + dy*dy)
+end
+
+return dist
+end
+
+---file:
+__package_preload['faces_test'] = function (...)
+local draw_face = require('draw_face')
+
+function draw_random_faces()
+  cls()
+  for n=0,14*14 - 1 do
+    draw_face(nil, (n % 14)*9, flr(n/14)*9)
+  end
+end
+
+local faces = {}
+
+function faces.init(props)
+  draw_random_faces()
+  return {
+    redraw=false
+  }
+end
+
+function faces.update(props)
+  if btnp(4) then
+    props.redraw = true
+  else
+    props.redraw = false
+  end
+  return props
+end
+
+function faces.draw(props)
+  if props.redraw then
+    draw_random_faces()
+  end
+end
+
+return faces
+end
+
+---file:
+__package_preload['make_tweener'] = function (...)
+return function(amts)
+  local tweener = {}
+
+  function tweener.init(props, factor)
+    props.tweens = {
+      tween=tweener.tween,
+      factor=factor or 1,
+      targets={},
+    }
+
+    for p,amt in pairs(amts) do
+      props.tweens.targets[p] = props[p]
+    end
+  end
+
+  function tweener.tween(props)
+    for p,amt in pairs(amts) do
+      local target = props.tweens.targets[p]
+      props[p] += (target - props[p]) * amt * props.tweens.factor
+    end
+  end
+
+  return tweener
+end
+
 end
 
 ---file:
@@ -220,780 +1006,6 @@ function starmap.draw(props)
 end
 
 return starmap
-end
-
----file:
-__package_preload['make_tweener'] = function (...)
-return function(amts)
-  local tweener = {}
-
-  function tweener.init(props, factor)
-    props.tweens = {
-      tween=tweener.tween,
-      factor=factor or 1,
-      targets={},
-    }
-
-    for p,amt in pairs(amts) do
-      props.tweens.targets[p] = props[p]
-    end
-  end
-
-  function tweener.tween(props)
-    for p,amt in pairs(amts) do
-      local target = props.tweens.targets[p]
-      props[p] += (target - props[p]) * amt * props.tweens.factor
-    end
-  end
-
-  return tweener
-end
-
-end
-
----file:
-__package_preload['clamp'] = function (...)
-return function(x,mn,mx)
-  return min(mx,max(x,mn))
-end
-end
-
----file:
-__package_preload['sprites'] = function (...)
-sprites = {
-  current_indicator=16,
-  destination_indicator=17,
-  crosshair=19,
-}
-end
-
----file:
-__package_preload['draw_face'] = function (...)
-local choose = require('choose')
-
-local face_probs = {
-  80
-}
-
-local hair_probs = {
-  0,
-  81,
-  81,
-  81,
-  82,
-  82,
-  82,
-  83,
-  83,
-  83,
-  84,
-  84,
-  84,
-}
-
-local facial_hair_probs = {
-  0,
-  0,
-  0,
-  0,
-  0,
-  0,
-  0,
-  0,
-  85,
-  86,
-  87,
-  88,
-}
-
-local skintone_probs = {
-  -- hooman colors:
-  brown,
-  brown,
-  brown,
-  peach,
-  peach,
-  peach,
-  white,
-  white,
-
-  -- alium colors:
-  indigo,
-  blue,
-  green,
-  red,
-}
-
-local hairtone_probs = {
-  -- orange,
-  orange,
-  -- yellow,
-  yellow,
-  -- white,
-  white,
-  -- brown,
-  brown,
-  -- light_gray,
-  light_gray,
-  -- dark_gray,
-  dark_gray,
-
-  dark_purple,
-  dark_blue,
-  blue,
-  -- green,
-  dark_green,
-  -- red,
-}
-
-function random_face_props()
-  local skintone = choose(skintone_probs)
-
-  local hairtone = skintone
-  while hairtone == skintone do
-    hairtone = choose(hairtone_probs)
-  end
-
-  return {
-    skintone=skintone,
-    hairtone=hairtone,
-    hair=choose(hair_probs),
-    facial_hair=choose(facial_hair_probs),
-    face=choose(face_probs)
-  }
-end
-
-function draw_face(props,x,y)
-  if not props then
-    props = random_face_props()
-  end
-
-  pal(red, props.skintone)
-  spr(props.face, x, y)
-
-  if props.hair then
-    pal(red, props.hairtone)
-    spr(props.hair, x, y)
-  end
-
-  if props.facial_hair then
-    pal(red, props.hairtone)
-    spr(props.facial_hair, x, y)
-  end
-
-  pal(red, red)
-end
-
-return draw_face
-end
-
----file:
-__package_preload['main'] = function (...)
-printh('------------------------------------------------------')
-printh(' picoverse by @lourobros')
-printh(' source code available at github.com/namuol/picoverse')
-printh('------------------------------------------------------')
-
-require('colors')
-require('sprites')
-require('buttons')
-
-__current_mode__ = nil
-__current_props__ = nil
-
-function set_mode(mode, initial_props)
-  __current_mode__ = mode
-  __current_props__ = mode.init(initial_props)
-end
-
-function _update()
-  __current_props__ = __current_mode__.update(__current_props__)
-  if btnp(btn_a,1) then
-    printh(stat(0))
-  end
-end
-
-function _draw()
-  __current_mode__.draw(__current_props__)
-end
-
-starmap = require('starmap')
-faces = require('faces_test')
-planetmap = require('planetmap')
-
-function _init()
-  set_mode(planetmap)
-end
-
-end
-
----file:
-__package_preload['vec'] = function (...)
-local dist = require('dist')
-
-local vec = {}
-
-local z = {x=0,y=0}
-
-function vec.norm(v)
-  local len = dist(z, v)
-  if len <= 0 then
-    return {x=0,y=0}
-  end
-  return {x=v.x/len,y=v.y/len}
-end
-
-function vec.mul(v, s)
-  return {x=v.x*s,y=v.y*s}
-end
-
-function vec.add(a, b)
-  return {x=a.x+b.x,y=a.y+b.y}
-end
-
-function vec.sub(a, b)
-  return {x=a.x-b.x,y=a.y-b.y}
-end
-
-return vec
-end
-
----file:
-__package_preload['dist'] = function (...)
-function dist(a,b)
-  local dx = b.x-a.x
-  local dy = b.y-a.y
-  return sqrt(dx*dx + dy*dy)
-end
-
-return dist
-end
-
----file:
-__package_preload['ecs.testcart.src.main'] = function (...)
-local ecs = require('ecs')
-world = nil
-
-function applyVelocity(entities)
-  for n,entity in pairs(ecs.entitiesWith(entities, {"vel", "pos"})) do
-    entity.pos.x += entity.vel.x
-    entity.pos.y += entity.vel.y
-  end
-
-  return entities
-end
-
-local gravity = 0.2
-function applyGravity(entities)
-  for n,entity in pairs(ecs.entitiesWith(entities, {"vel"})) do
-    entity.vel.y += gravity
-  end
-
-  return entities
-end
-
-local floor = 127
-local left_wall = 0
-local right_wall = 127
-function bounce(entities)
-  for n,entity in pairs(ecs.entitiesWith(entities, {"vel", "pos", "radius"})) do
-    local bottom = entity.pos.y + entity.radius
-    if bottom > floor then
-      entity.pos.y = floor - entity.radius
-      entity.vel.y *= -1
-    end
-
-    local left = entity.pos.x - entity.radius
-    if left < left_wall then
-      entity.pos.x = left_wall + entity.radius
-      entity.vel.x *= -1
-    end
-
-    local right = entity.pos.x + entity.radius
-    if right > right_wall then
-      entity.pos.x = right_wall - entity.radius
-      entity.vel.x *= -1
-    end
-  end
-
-  return entities
-end
-
-function draw(entities)
-  for n,entity in pairs(ecs.entitiesWith(entities, {"draw"})) do
-    entity.draw(entity)
-  end
-
-  return entities
-end
-
-function drawCircle(e)
-  circfill(e.pos.x,e.pos.y, e.radius, e.color)
-end
-
-function drawSquare(e)
-  rectfill(e.pos.x,e.pos.y, e.pos.x+e.size,e.pos.y+e.size, e.color)
-end
-
-function norm()
-  return rnd(2) - 1
-end
-
-function random_ball()
-  return {
-    draw=drawCircle,
-    vel={x=norm()*3,y=norm()*3},
-    pos={x=rnd(128),y=rnd(128)},
-    radius=2+rnd(4),
-    color=1+flr(rnd(15))
-  }
-end
-
-function tween(entities)
-  for n,entity in pairs(ecs.entitiesWith(entities, {"target_pos", "pos"})) do
-    entity.pos.x += (entity.target_pos.x - entity.pos.x) * 0.1
-    entity.pos.y += (entity.target_pos.y - entity.pos.y) * 0.1
-  end
-
-  return entities
-end
-
-function randomize_positions(entities)
-  if rnd(1) < 0.01 then
-    for n,entity in pairs(ecs.entitiesWith(entities, {"target_pos"})) do
-      entity.target_pos.x = rnd(128)
-      entity.target_pos.y = rnd(128)
-    end
-  end
-  return entities
-end
-
-function random_square()
-  return {
-    draw=drawSquare,
-    tween=tween,
-    pos={x=rnd(128),y=rnd(128)},
-    target_pos={x=rnd(128),y=rnd(128)},
-    size=4+flr(rnd(8)),
-    color=1+flr(rnd(15))
-  }
-end
-
-function _init()
-  world = ecs.world()
-  for i=1,10 do
-    world.addEntity(random_ball())
-  end
-
-  for i=1,10 do
-    world.addEntity(random_square())
-  end
-end
-
-function _update()
-  world.invoke({
-    applyGravity,
-    applyVelocity,
-    bounce,
-    randomize_positions,
-    tween,
-  })
-end
-
-function _draw()
-  cls()
-
-  world.invoke({
-    draw,
-  })
-end
-end
-
----file:
-__package_preload['buttons'] = function (...)
-btn_left = 0
-btn_right = 1
-btn_up = 2
-btn_down = 3
-btn_a = 4
-btn_b = 5
-end
-
----file:
-__package_preload['planetmap'] = function (...)
-local dist = require('dist')
-local vec = require('vec')
-local make_tweener = require('make_tweener')
-local clamp = require('clamp')
-local times = require('times')
-local choose = require('choose')
-local ecs = require('ecs.ecs')
-
-local world = nil
-
-local planetmap = {}
-
-local planet_count_probs = {
-  1,1,
-  2,2,2,
-  3,3,3,3,
-  4,4,4,
-  5,5,
-  6,6
-}
-
-local planet_color_probs = {
-  -- light_gray,
-  -- light_gray,
-  -- light_gray,
-  light_gray,
-
-  -- brown,
-  -- brown,
-
-  -- dark_gray,
-  -- dark_gray,
-  -- dark_gray,
-
-  -- dark_green,
-  -- dark_green,
-
-  -- dark_purple,
-  pink,  
-  green,
-  orange,
-  blue,
-  -- dark_blue,
-}
-
-local planet_size_probs = {
-  3,3,3,
-  5,5,5,5,5,5,
-
-  -- 6,6,6,6,6,6,
-  7,7,7
-}
-
-local moon_count_probs = {
-  0,0,0,0,
-  1,1,1,1,1,
-  2,2,2,2,2,2,
-  3,3,3,3,
-  4,4,
-}
-
-local moon_color_probs = {
-  light_gray,
-  light_gray,
-
-  brown,
-  brown,
-  brown,
-  brown,
-
-  dark_gray,
-  dark_gray,
-  dark_gray,
-  dark_gray,
-  dark_gray,
-  dark_gray,
-
-  dark_green,
-  dark_green,
-  dark_green,
-
-  dark_blue,
-  dark_blue,
-  dark_blue,
-  dark_blue,
-  dark_blue,
-  dark_blue,
-}
-
-local moon_size_probs = {
-  1,1,1,1,1,1,1,1,
-  2,2,2,2,2,2,2,2,2,2,
-  -- 3,3,3,
-}
-
-local tweener = make_tweener({x=0.4,y=0.4})
-
-function random_moon_props()
-  local props = {
-    size=choose(moon_size_probs),
-    color=choose(moon_color_probs),
-    draw=draw_planet,
-    x=0,y=0,
-  }
-
-  tweener.init(props)
-
-  return props
-end
-
-function random_planet_props()
-  local props = {
-    color=choose(planet_color_probs),
-    size=choose(planet_size_probs),
-    moons=times(choose(moon_count_probs), random_moon_props),
-    draw=draw_planet,
-    x=0,y=0,
-  }
-
-  tweener.init(props)
-
-  return props
-end
-
-function random_planetmap_props()
-  return {
-    planets=times(choose(planet_count_probs), random_planet_props)
-  }
-end
-
-function update_tween_positions(props)
-  local pad = 3
-  local top = 1
-
-  for np,planet in pairs(props.planets) do
-    top += planet.size
-    local left = 7
-    local selected
-
-    if props.selected.planet == np then
-      selected = true
-      if props.selected.moon == 0 then
-        left += pad*2
-        planet.selected = true
-      else
-        planet.selected = false
-      end
-      top += pad*2
-    else
-      planet.selected = false
-    end
-    
-    planet.tweens.targets.x = left
-    planet.tweens.targets.y = top
-
-    left += planet.size + pad
-
-    if selected and props.selected.moon == 0 then
-      left += pad*2
-    end
-
-    for mp,moon in pairs(planet.moons) do
-      left += moon.size
-      moon.tweens.factor = 1/(1 + mp*0.5)
-   
-      if selected and props.selected.moon == mp then
-        left += pad*2
-        top += pad
-        moon.selected = true
-      else
-        moon.selected = false
-      end
-   
-      moon.tweens.targets.x = left
-      moon.tweens.targets.y = top
-
-      left += moon.size + pad
-
-      if selected and props.selected.moon == mp then
-        left += pad*2
-        top -= pad
-      end
-    end
-
-    top += planet.size + pad
-
-    if selected then
-      top += pad*2
-    end
-  end
-end
-
-function planetmap.init(props)
-  props = props or random_planetmap_props()
-  local planet = choose(props.planets)
-  props.selected = {
-    planet=1+flr(rnd(#props.planets)),
-    moon=flr(rnd(#planet.moons + 1)),
-  }
-
-  world = ecs.world()
-
-  for np,planet in pairs(props.planets) do
-    world.addEntity(planet)
-    for nm,moon in pairs(planet.moons) do
-      world.addEntity(moon)
-    end
-  end
-
-  update_tween_positions(props)
-  return props
-end
-
-function tween(entities)
-  for n,entity in pairs(ecs.entitiesWith(entities, {"tweens"})) do
-    entity.tweens.tween(entity)
-  end
-
-  return entities
-end
-
-function draw(entities)
-  for n,entity in pairs(ecs.entitiesWith(entities, {"draw"})) do
-    entity.draw(entity, entity.x, entity.y, entity.selected)
-  end
-
-  return entities
-end
-
-function planetmap.update(props)
-  if btnp(btn_a) then
-    return planetmap.init()
-  end
-
-  local dirty = false
-  if btnp(btn_down) then
-    props.selected.planet = 1 + (props.selected.planet % #props.planets)
-    props.selected.moon = 0
-    dirty = true
-  elseif btnp(btn_up) then
-    props.selected.planet = 1 + ((props.selected.planet-2) % #props.planets)
-    props.selected.moon = 0
-    dirty = true
-  end
-  local selected_planet = props.planets[props.selected.planet]
-  if btnp(btn_right) then
-    props.selected.moon = (props.selected.moon+1) % (#selected_planet.moons + 1)
-    dirty = true
-  elseif btnp(btn_left) then
-    props.selected.moon = (props.selected.moon-1) % (#selected_planet.moons + 1)
-    dirty = true
-  end
-
-  if dirty then
-    update_tween_positions(props)
-  end
-
-  world.invoke({
-    tween,
-  })
-
-  return props
-end
-
-function draw_planet(props,x,y,selected)
-  if selected then
-    circ(x, y, props.size+2, red)
-    rectfill(x-props.size-2,y-props.size-2,x+props.size+2, y+flr(props.size/2), black)
-  end
-  circfill(x, y, props.size, props.color)
-end
-
-function planetmap.draw(props)
-  cls()
-  world.invoke({
-    draw,
-  })
-end
-
-return planetmap
-end
-
----file:
-__package_preload['faces_test'] = function (...)
-local draw_face = require('draw_face')
-
-function draw_random_faces()
-  cls()
-  for n=0,14*14 - 1 do
-    draw_face(nil, (n % 14)*9, flr(n/14)*9)
-  end
-end
-
-local faces = {}
-
-function faces.init(props)
-  draw_random_faces()
-  return {
-    redraw=false
-  }
-end
-
-function faces.update(props)
-  if btnp(4) then
-    props.redraw = true
-  else
-    props.redraw = false
-  end
-  return props
-end
-
-function faces.draw(props)
-  if props.redraw then
-    draw_random_faces()
-  end
-end
-
-return faces
-end
-
----file:
-__package_preload['ecs.ecs'] = function (...)
-local ecs = {}
-
-function containsAll(e, keys)
-  for _,name in pairs(keys) do
-    if not e[name] then
-      return false
-    end
-  end
-  
-  return true
-end
-
-function ecs.entitiesWith(entities, componentNames)
-  local results = {}
-  for id,entity in pairs(entities) do
-    if containsAll(entity, componentNames) then
-      results[#results+1] = entity
-    end
-  end
-
-  return results
-end
-
-function ecs.world()
-  local world = {}
-
-  local entities = {}
-  function world.addEntity(components)
-    local id = #entities+1
-    entities[id] = components
-    
-    return id
-  end
-
-  function world.invoke(funcs)
-    for n,func in pairs(funcs) do
-      entities = func(entities)
-    end
-  end
-
-  return world
-end
-
-return ecs
-end
-
----file:
-__package_preload['choose'] = function (...)
-return function(arr)
-  return arr[1+flr(rnd(#arr))]
-end
 end
 --- require/dofile replacements
 
