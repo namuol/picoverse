@@ -110,7 +110,7 @@ function draw_face(props,x,y)
     spr(props.facial_hair, x, y)
   end
 
-  pal(red, red)
+  pal()
 end
 
 return draw_face

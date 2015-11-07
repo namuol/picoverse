@@ -7,13 +7,18 @@ utils/lua2pico.lua:
 	git submodule init
 	git submodule update
 
-build: utils utils/lua2pico.lua
+src/ecs/ecs.lua:
+	git submodule init
+	git submodule update	
+
+build: utils utils/lua2pico.lua src/ecs/ecs.lua
 	@mkdir -p build
-	@utils/png2pico.lua src/gfx.png src/cart.p8 > .tmp.p8
-	@utils/pack.lua src | utils/lua2pico.lua - .tmp.p8 > src/cart.p8
-	@rm .tmp.p8
+	@utils/png2pico.lua src/gfx.png src/cart.p8 > .tmp0.p8
+	@./png2map.lua src/map.png .tmp0.p8 > .tmp.p8
+	@utils/pack.lua src | utils/lua2pico.lua - .tmp.p8 > build/cart.p8
+	@rm .tmp.p8 .tmp0.p8
 
 run: pico-8/pico8 build
-	@cd pico-8; ln -s ../src/cart.p8 .; ./pico8 -run cart.p8; unlink cart.p8
+	@cd pico-8; ln -s ../build/cart.p8 .; ./pico8 -run cart.p8; unlink cart.p8
 
 .PHONY: build

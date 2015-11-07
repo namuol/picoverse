@@ -1,8 +1,4 @@
-local dist = require('dist')
-local vec = require('vec')
-local make_tweener = require('make_tweener')
-local clamp = require('clamp')
-local times = require('times')
+local dither_radius_map = require('dither_radius_map')
 
 function draw_star(props)
   local color
@@ -129,6 +125,14 @@ end
 function starmap.draw(props)
   cls()
   
+  -- dither_radius_map({
+  --   radius=props.player_range,
+  --   penumbra=16,
+  --   pos=props.player_pos,
+  -- })
+  -- pal(red, dark_blue)
+  -- map(0,0, 0,0, 16,16)
+  -- pal()
   circfill(props.player_pos.x, props.player_pos.y, props.player_range, dark_blue)
 
   if props.destination_star then

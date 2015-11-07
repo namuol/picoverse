@@ -1,5 +1,5 @@
 sprites = {
-  current_indicator=16,
-  destination_indicator=17,
-  crosshair=19,
+  current_indicator=33,
+  destination_indicator=34,
+  crosshair=35,
 }

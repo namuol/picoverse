@@ -1,10 +1,10 @@
 local dist = require('dist')
 local vec = require('vec')
 local make_tweener = require('make_tweener')
-local clamp = require('clamp')
 local times = require('times')
 local choose = require('choose')
 local ecs = require('ecs.ecs')
+local dither_radius_map = require('dither_radius_map')
 
 local world = nil
 
