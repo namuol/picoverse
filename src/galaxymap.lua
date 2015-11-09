@@ -1,5 +1,7 @@
 local galaxymap = {}
 
+local make_palette_fader = require('make_palette_fader')
+
 function galaxymap.init(props)
   pal()
   color(white)
@@ -8,8 +10,10 @@ function galaxymap.init(props)
     scale=0,
   }
 
+  props.fader = make_palette_fader()
+
   local get_y = function(t,i)
-    return max(0, 8 - 8*((t - 1)-i*0.05))
+    return max(0, 8 - 8*((t - 2)-i*0.05))
     -- return 4*sin(t-i*0.1)
   end
 
@@ -62,6 +66,9 @@ end
 
 function galaxymap.draw(props)
   cls()
+  
+  props.fader.update()
+
   for x=0,15 do
     for y=0,15 do
       local size = mget(x,y)/255
