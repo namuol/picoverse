@@ -1,7 +1,5 @@
 local galaxymap = {}
 
-local make_palette_fader = require('make_palette_fader')
-
 function galaxymap.init(props)
   pal()
   color(white)
@@ -10,7 +8,7 @@ function galaxymap.init(props)
     scale=0,
   }
 
-  props.fader = make_palette_fader()
+  props.fader = make_palette_fader(1000)
 
   local get_y = function(t,i)
     return max(0, 8 - 8*((t - 2)-i*0.05))

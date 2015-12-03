@@ -1,11 +1,3 @@
-local dist = require('dist')
-local vec = require('vec')
-local make_tweener = require('make_tweener')
-local times = require('times')
-local choose = require('choose')
-local ecs = require('ecs.ecs')
-local dither_radius_map = require('dither_radius_map')
-
 local world = nil
 
 local planetmap = {}
@@ -208,6 +200,8 @@ function planetmap.init(props)
   end
 
   update_tween_positions(props)
+
+  props.fader = make_palette_fader(300)
   return props
 end
 
@@ -272,6 +266,10 @@ end
 
 function planetmap.draw(props)
   cls()
+  pal()
+
+  props.fader.update()
+  
   world.invoke({
     draw,
   })

@@ -13,10 +13,13 @@ rot = require('rot')
 dist = require('dist')
 clamp = require('clamp')
 choose = require('choose')
+ecs = require('ecs.ecs')
 times = require('times')
 cprint = require('cprint')
+dither_radius_map = require('dither_radius_map')
 make_tweener = require('make_tweener')
 make_printer = require('make_printer')
+make_palette_fader = require('make_palette_fader')
 
 __current_mode__ = nil
 __current_props__ = nil

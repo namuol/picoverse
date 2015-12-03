@@ -58,6 +58,8 @@ end
 
 function starmap.init(props)
   props = props or random_starmap_props()
+  props.fader = make_palette_fader(300)
+  
   return props
 end
 
@@ -124,6 +126,8 @@ end
 
 function starmap.draw(props)
   cls()
+  pal()
+  props.fader.update()
   
   -- dither_radius_map({
   --   radius=props.player_range,

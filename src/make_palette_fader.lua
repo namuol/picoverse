@@ -3,7 +3,9 @@
 local dpal={0,1,1, 2,1,13,6,
             4,4,9,3, 13,1,13,14}
         
-function make_palette_fader()
+function make_palette_fader(ms)
+  ms = ms or 1000
+  local rate = 1000/ms
   local i = 30
   return {
     update = function()
@@ -11,11 +13,11 @@ function make_palette_fader()
         return false
       end
 
-      i -= 1
+      i -= rate
 
       for j=1,15 do
         col = j
-        for k=1,((i+(j%5))/4) do
+        for k=1,((flr(i)+(j%5))/4) do
           col=dpal[col]
         end
         pal(j,col,1)
